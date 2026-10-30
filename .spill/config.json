@@ -1,0 +1,10 @@
+{
+  "project": "",
+  "sections": [],
+  "statuses": {
+    "spec": ["draft", "discussing", "approved", "rejected", "active", "done"],
+    "question": ["open", "answered", "dropped"]
+  },
+  "userOnlyStatuses": ["approved", "rejected"],
+  "maxActiveSpecs": 1
+}
