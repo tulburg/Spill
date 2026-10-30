@@ -1,10 +1,24 @@
 {
-  "project": "",
+  "project": "Spill",
   "sections": [],
   "statuses": {
-    "spec": ["draft", "discussing", "approved", "rejected", "active", "done"],
-    "question": ["open", "answered", "dropped"]
+    "spec": [
+      "draft",
+      "discussing",
+      "approved",
+      "rejected",
+      "active",
+      "done"
+    ],
+    "question": [
+      "open",
+      "answered",
+      "dropped"
+    ]
   },
-  "userOnlyStatuses": ["approved", "rejected"],
+  "userOnlyStatuses": [
+    "approved",
+    "rejected"
+  ],
   "maxActiveSpecs": 1
 }

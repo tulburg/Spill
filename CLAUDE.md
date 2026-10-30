@@ -1,6 +1,6 @@
-# Project name
+# Spill
 
-One paragraph on what this project is. Replace this heading and paragraph when the project starts.
+Spill is a visual control center for a project's specs. It shows every question, spec, and decision as a card on a canvas, colored by status, so the user can see what is open, approved, being discussed, and being worked on. Claude reads and writes the board through the Spill MCP server, which this repo also builds. Spill dogfoods its own protocol: section 4 applies here too, using the file fallback until the app exists.
 
 ---
 
