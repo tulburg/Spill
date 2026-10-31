@@ -1,6 +1,9 @@
 #!/usr/bin/env bun
+import { existsSync } from "node:fs";
+import { join } from "node:path";
 import { Board } from "./board";
 import { serve } from "./mcp";
+import { startServer } from "./server";
 import { Store, findSpillDir } from "./store";
 import { event, full, summary } from "./tools";
 
@@ -14,7 +17,25 @@ const USAGE = `spill: the spec board, from the terminal
   spill comment ID text           comment on a card
   spill ask "title" [body]        add a question for Claude
   spill log [n]                   last n events (default 20)
+  spill app                       open the board in the Spill window
+  spill serve [port]              serve the board for a browser (default 4747)
   spill mcp                       run the MCP server on stdio (for Claude)`;
+
+const TAURI_DIR = join(import.meta.dir, "..", "src-tauri");
+
+// Serve the board, then (for `spill app`) open the Tauri window on it. Closing the window stops the server.
+async function openApp(store: Store, window: boolean, port: number): Promise<void> {
+  const server = await startServer(store, port);
+  const url = `http://localhost:${server.port}`;
+  console.log(`Spill board for ${store.config().project || store.dir} at ${url}`);
+  if (!window) return;
+  const built = join(TAURI_DIR, "target", "debug", "spill-app");
+  const cmd = existsSync(built) ? [built] : ["cargo", "run", "--quiet", "--manifest-path", join(TAURI_DIR, "Cargo.toml")];
+  const child = Bun.spawn(cmd, { env: { ...process.env, SPILL_URL: url }, stdout: "inherit", stderr: "inherit" });
+  await child.exited;
+  server.stop(true);
+  process.exit(0);
+}
 
 function main(argv: string[]): void {
   const [cmd, ...rest] = argv;
@@ -25,6 +46,13 @@ function main(argv: string[]): void {
   const store = new Store(findSpillDir(process.cwd()));
   if (cmd === "mcp") {
     serve(store);
+    return;
+  }
+  if (cmd === "serve" || cmd === "app") {
+    openApp(store, cmd === "app", Number(rest[0] ?? process.env.SPILL_PORT ?? 4747)).catch((e) => {
+      console.error(e.message);
+      process.exit(1);
+    });
     return;
   }
 

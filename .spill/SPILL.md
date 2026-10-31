@@ -98,6 +98,9 @@ spill board                     spill approve S-n [note]
 spill show ID                   spill reject S-n reason
 spill answer Q-n text           spill comment ID text
 spill ask "title" [body]        spill log [n]
+spill app                       spill serve [port]
 ```
+
+`spill app` opens the board in the Spill window, where specs can also be approved or rejected.
 
 Every change, from either side, is appended to `.spill/events.jsonl`.
