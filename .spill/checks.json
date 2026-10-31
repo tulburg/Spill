@@ -1,0 +1,459 @@
+{
+  "S-13": {
+    "at": "2026-10-31T07:28:50.940Z",
+    "running": false,
+    "results": [
+      {
+        "name": "a spec with one failing check shows a red dot and the script name",
+        "pass": true,
+        "detail": "verified on a board copy (S-19, weights_sum.py)"
+      }
+    ]
+  },
+  "S-22": {
+    "at": "2026-10-31T07:34:36.109Z",
+    "running": false,
+    "results": [
+      {
+        "name": "approve from the sheet closes it and the card shows Approved",
+        "pass": true
+      },
+      {
+        "name": "reject from the sheet closes it",
+        "pass": true
+      },
+      {
+        "name": "click empty canvas closes; drag keeps it open",
+        "pass": true
+      },
+      {
+        "name": "click a spec opens the sheet; canvas still pans",
+        "pass": true
+      },
+      {
+        "name": "links tab opens the linked card",
+        "pass": true
+      },
+      {
+        "name": "comment appears in Activity live",
+        "pass": true
+      },
+      {
+        "name": "Esc closes; reload with #ID reopens",
+        "pass": true
+      }
+    ]
+  },
+  "S-2": {
+    "at": "2026-10-31T08:25:11.433Z",
+    "running": false,
+    "results": [
+      {
+        "name": "active: ring, Building tag and panel group appear",
+        "pass": true
+      },
+      {
+        "name": "Req n done comment moves the progress bar",
+        "pass": true
+      },
+      {
+        "name": "done: check in the panel, then back to Discussing",
+        "pass": true
+      },
+      {
+        "name": "shimmer moves across the bar and the panel item",
+        "pass": true
+      },
+      {
+        "name": "reduced motion: nothing animates",
+        "pass": true,
+        "detail": "Forced the page's reduced-motion rules; getAnimations() empty across every trigger"
+      }
+    ]
+  },
+  "S-1": {
+    "at": "2026-10-31T07:44:12.400Z",
+    "running": false,
+    "results": [
+      {
+        "name": "Notice shows S-n added, title and author for 8s",
+        "pass": true
+      },
+      {
+        "name": "Show pans and opens the side sheet",
+        "pass": true
+      },
+      {
+        "name": "Entry highlight; New pill clears on open or hover",
+        "pass": true
+      },
+      {
+        "name": "Need-you count updates",
+        "pass": true
+      },
+      {
+        "name": "Specs within 3s grouped, Show opens first",
+        "pass": true
+      },
+      {
+        "name": "OS notification when unfocused, text passed as arguments",
+        "pass": true,
+        "detail": "Endpoint returned ok; banner itself not seen by me"
+      },
+      {
+        "name": "Existing specs do not notify on open",
+        "pass": true
+      }
+    ]
+  },
+  "S-24": {
+    "at": "2026-10-31T07:50:08.761Z",
+    "running": false,
+    "results": [
+      {
+        "name": "spill_ask without multi: option buttons, one pick",
+        "pass": true,
+        "detail": "Unit test; single select UI unchanged"
+      },
+      {
+        "name": "spill_ask multi: checkboxes; A and C record one decision listing both",
+        "pass": true
+      },
+      {
+        "name": "Answer button disabled with nothing picked",
+        "pass": true
+      },
+      {
+        "name": "spill answer Q-n A,C records the same decision as the app",
+        "pass": true
+      },
+      {
+        "name": "Badge shows the open count and drops after an answer",
+        "pass": true
+      }
+    ]
+  },
+  "S-5": {
+    "at": "2026-10-31T07:52:07.709Z",
+    "running": false,
+    "results": [
+      {
+        "name": "Revert an active spec: moves to discussing, building stops",
+        "pass": true
+      },
+      {
+        "name": "spill_inbox reports the revert",
+        "pass": true
+      },
+      {
+        "name": "Card shows the Reverted note and reason",
+        "pass": true
+      },
+      {
+        "name": "Approve again: note goes away",
+        "pass": true
+      },
+      {
+        "name": "Only the user can revert; drafts cannot be reverted",
+        "pass": true
+      }
+    ]
+  },
+  "S-25": {
+    "at": "2026-10-31T07:56:20.554Z",
+    "running": false,
+    "results": [
+      {
+        "name": "Fix shows on the sheet line and the card row",
+        "pass": true
+      },
+      {
+        "name": "Click adds the comment; spill_inbox shows it",
+        "pass": true
+      },
+      {
+        "name": "Sent until a new run; gone when all pass",
+        "pass": true
+      }
+    ]
+  },
+  "S-27": {
+    "at": "2026-10-31T08:19:21.344Z",
+    "running": false,
+    "results": [
+      {
+        "name": "Active spec: ink ring, tag, spinner, dots, progress",
+        "pass": true
+      },
+      {
+        "name": "Panel item ink with shimmer",
+        "pass": true
+      },
+      {
+        "name": "Connector lines into the active card ink and animated",
+        "pass": true
+      },
+      {
+        "name": "Done shows the green check",
+        "pass": true
+      },
+      {
+        "name": "No green on an active card or its panel item",
+        "pass": true
+      }
+    ]
+  },
+  "S-26": {
+    "at": "2026-10-31T08:21:36.494Z",
+    "running": false,
+    "results": [
+      {
+        "name": "Other on an option question: no D-n, open, redirect note",
+        "pass": true
+      },
+      {
+        "name": "spill_inbox lists the redirect",
+        "pass": true
+      },
+      {
+        "name": "spill_update clears the note and shows new options",
+        "pass": true
+      },
+      {
+        "name": "Free answer without options still records a D-n",
+        "pass": true,
+        "detail": "Unit test"
+      }
+    ]
+  },
+  "S-4": {
+    "at": "2026-10-31T08:22:57.998Z",
+    "running": false,
+    "results": [
+      {
+        "name": "Approve: one sweep, rests green with the seal",
+        "pass": true
+      },
+      {
+        "name": "Approved, active and done distinct in grayscale",
+        "pass": true,
+        "detail": "Seal vs ink ring vs grey check; judged from screenshots, not a grayscale render"
+      }
+    ]
+  },
+  "S-10": {
+    "at": "2026-10-31T08:30:57.225Z",
+    "running": false,
+    "results": [
+      {
+        "name": "every status renders its facts",
+        "pass": true,
+        "detail": "draft, discussing, active, approved, done, rejected checked on a board copy"
+      },
+      {
+        "name": "2 open questions: amber \"2 open\" chip and in Needs you",
+        "pass": true,
+        "detail": "S-28 copy: chip shown, need-you count 3 -> 4"
+      },
+      {
+        "name": "chip click pans to group",
+        "pass": true
+      },
+      {
+        "name": "design link counts Paper/Figma URLs",
+        "pass": true,
+        "detail": "2 boards"
+      },
+      {
+        "name": "fixed width",
+        "pass": true,
+        "detail": "all root spec cards 280px"
+      }
+    ]
+  },
+  "S-28": {
+    "at": "2026-10-31T08:42:18.280Z",
+    "running": false,
+    "results": [
+      {
+        "name": "4 pending: All 4 and 3 rows, unblocked first",
+        "pass": true,
+        "detail": "S-7, S-8, S-29 shown; blocked S-6 sorted last"
+      },
+      {
+        "name": "blocked spec shows lock and Q-n",
+        "pass": true,
+        "detail": "S-6 row shows Q-10"
+      },
+      {
+        "name": "approving drops it live",
+        "pass": true,
+        "detail": "All 4 -> All 2 after approving S-7 and S-8 on a copy"
+      },
+      {
+        "name": "hidden when nothing pending",
+        "pass": true
+      }
+    ]
+  },
+  "S-6": {
+    "at": "2026-10-31T08:45:36.374Z",
+    "running": false,
+    "results": [
+      {
+        "name": "every status identifiable without its label",
+        "pass": true,
+        "detail": "draft, discussing, approved, active, done, rejected checked side by side on a board copy"
+      },
+      {
+        "name": "discussing shows comment count",
+        "pass": true,
+        "detail": "2 comments on a copy spec"
+      },
+      {
+        "name": "draft shows author",
+        "pass": true,
+        "detail": "Draft by Claude"
+      },
+      {
+        "name": "status key opens, hides, remembers",
+        "pass": true
+      }
+    ]
+  },
+  "S-8": {
+    "at": "2026-10-31T09:32:08.427Z",
+    "running": false,
+    "results": [
+      {
+        "name": "no top bar message button; FAB opens and closes; draft survives",
+        "pass": true
+      },
+      {
+        "name": "pasted screenshot saved and listed in spill_inbox",
+        "pass": true,
+        "detail": "thumbnail shown; file under .spill/attachments/; inbox line has [attached: path]"
+      },
+      {
+        "name": "received, then working after inbox read",
+        "pass": true
+      },
+      {
+        "name": "reply popup; background reply leaves a badge that opens and clears",
+        "pass": true
+      },
+      {
+        "name": "no model name anywhere",
+        "pass": true
+      },
+      {
+        "name": "spill message --file",
+        "pass": true,
+        "detail": "also rejects a missing file"
+      }
+    ]
+  },
+  "S-7": {
+    "at": "2026-10-31T09:35:43.883Z",
+    "running": false,
+    "results": [
+      {
+        "name": "fresh window: canvas, toolbar, message button",
+        "pass": true,
+        "detail": "plus the bottom-left panel from S-2/S-18/S-28"
+      },
+      {
+        "name": "type S-5 and Enter focuses S-5",
+        "pass": true,
+        "detail": "Cmd K focused the field; S-5 panned into view and flashed"
+      },
+      {
+        "name": "filters with counts",
+        "pass": true,
+        "detail": "Building filter lists only the active spec"
+      },
+      {
+        "name": "no spec counts in the toolbar",
+        "pass": true
+      },
+      {
+        "name": "project menu",
+        "pass": true,
+        "detail": "Sections list, Decisions log, Open .spill folder; Switch project and settings marked Soon"
+      }
+    ]
+  },
+  "S-29": {
+    "at": "2026-10-31T10:39:22.080Z",
+    "running": false,
+    "results": [
+      {
+        "name": "Approve shows Build and Reject; Claude does not start the spec",
+        "pass": true,
+        "detail": "Copy: S-32 approved shows Build/Reject; claude active on approved is refused (test)"
+      },
+      {
+        "name": "Build moves the spec to queued and Claude starts it",
+        "pass": true,
+        "detail": "Build click on copy -> Queued to build; inbox shows approved -> queued; claude can set queued spec active (test)"
+      },
+      {
+        "name": "Each D-11 condition alone auto-approves with actor auto and reason",
+        "pass": true,
+        "detail": "Tests for questions answered, child specs done, requirements met; copy S-33 via Reqs 1-2 done"
+      },
+      {
+        "name": "A spec blocked by another open question is not auto-approved",
+        "pass": true,
+        "detail": "Tests: second open question and open question with all reqs done both hold the spec"
+      },
+      {
+        "name": "Design question answered A approves with design approved",
+        "pass": true,
+        "detail": "Copy: Q-12 Answer A in the app -> S-31 Auto-approved, design approved; B leaves it draft (test)"
+      },
+      {
+        "name": "Rejecting an approved spec works",
+        "pass": true,
+        "detail": "Copy: S-33 approved -> Reject with reason -> rejected"
+      }
+    ]
+  },
+  "S-30": {
+    "at": "2026-10-31T10:47:11.338Z",
+    "running": false,
+    "results": [
+      {
+        "name": "Send a message: the ring spins at once, before the inbox is read",
+        "pass": true,
+        "detail": "Copy: fab had class received 20ms after Send, before any inbox call"
+      },
+      {
+        "name": "Open with finished and in-progress threads: box plus separate thread cards, Working row",
+        "pass": true,
+        "detail": "Copy: new message box plus 3 isolated cards with 14px gaps, no panel; the in-progress thread ended with Working"
+      },
+      {
+        "name": "Reply on an older thread lands in it and spill_inbox names it",
+        "pass": true,
+        "detail": "Copy: Reply on the 10:15 thread; inbox line 'in thread of 2026-10-31 10:15'; default spill_reply went to that thread"
+      },
+      {
+        "name": "A long reply shows as one row and expands on click",
+        "pass": true,
+        "detail": "Copy: 42px row grew to 102px on click"
+      }
+    ]
+  },
+  "S-12": {
+    "at": "2026-10-31T10:49:21.754Z",
+    "running": false,
+    "results": [
+      {
+        "name": "After answering a question, the new D-n appears first in the strip within one second",
+        "pass": true,
+        "detail": "Copy: answered Q-12 by CLI; D-13 was first in the strip 146ms after the command started"
+      }
+    ]
+  }
+}

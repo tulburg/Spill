@@ -67,6 +67,26 @@ describe("status rules", () => {
     expect(c.comments).toMatch(/- User \(\d{4}-\d{2}-\d{2}\): ship it/);
   });
 
+  test("a spec with an open question cannot be approved until it is answered (S-21)", () => {
+    const s = claude.draftSpec({ title: "a" });
+    const q = claude.ask({ title: "which?", blocks: [s.id] });
+    expect(() => user.setStatus({ id: s.id, status: "approved" })).toThrow(`${s.id} has open questions: ${q.id}. Answer them first.`);
+    expect(store.get(s.id).status).toBe("draft");
+    user.setStatus({ id: s.id, status: "rejected", note: "no" });
+    expect(store.get(s.id).status).toBe("rejected");
+    user.record({ question: q.id, title: "this one" });
+    user.setStatus({ id: s.id, status: "approved" });
+    expect(store.get(s.id).status).toBe("approved");
+  });
+
+  test("dropped questions do not block approval (S-21)", () => {
+    const s = claude.draftSpec({ title: "a" });
+    const q = claude.ask({ title: "which?", blocks: [s.id] });
+    claude.setStatus({ id: q.id, status: "dropped" });
+    user.setStatus({ id: s.id, status: "approved" });
+    expect(store.get(s.id).status).toBe("approved");
+  });
+
   test("statuses must fit the card kind", () => {
     const q = claude.ask({ title: "q" });
     expect(() => claude.setStatus({ id: q.id, status: "active" })).toThrow(/not a question status/);
@@ -75,6 +95,7 @@ describe("status rules", () => {
   test("maxActiveSpecs is enforced", () => {
     const a = claude.draftSpec({ title: "a" });
     const b = claude.draftSpec({ title: "b" });
+    for (const c of [a, b]) user.setStatus({ id: c.id, status: "approved" }), user.build({ id: c.id });
     claude.setStatus({ id: a.id, status: "active" });
     expect(() => claude.setStatus({ id: b.id, status: "active" })).toThrow(/maxActiveSpecs/);
   });
@@ -102,6 +123,76 @@ describe("links and decisions", () => {
   });
 });
 
+describe("MCP instructions", () => {
+  test("initialize sends the full rules to the client", () => {
+    const r = handle(store, { jsonrpc: "2.0", id: 1, method: "initialize", params: {} }) as any;
+    const text: string = r.result.instructions;
+    for (const rule of ["Specs before code", "Only the user approves", "redirect, not a decision", "spill_checks", "(reverted)", "Fix failing check", "spill_reply"])
+      expect(text).toContain(rule);
+  });
+});
+
+describe("revert (S-5)", () => {
+  test("the user reverts an active spec to discussing with a reason; the inbox reports it", () => {
+    claude.draftSpec({ title: "a" });
+    user.setStatus({ id: "S-1", status: "approved" });
+    user.build({ id: "S-1" });
+    claude.setStatus({ id: "S-1", status: "active" });
+    claude.inbox();
+    user.revert({ id: "S-1", reason: "wrong direction" });
+    expect(store.get("S-1").status).toBe("discussing");
+    expect(store.get("S-1").comments).toContain("Reverted: wrong direction");
+    expect(claude.inbox().map((e) => e.detail)).toEqual(["active -> discussing (reverted): wrong direction"]);
+  });
+
+  test("Claude cannot revert, and only approved, active or done specs can be", () => {
+    claude.draftSpec({ title: "a" });
+    expect(() => user.revert({ id: "S-1" })).toThrow("only approved, queued, active or done");
+    user.setStatus({ id: "S-1", status: "approved" });
+    expect(() => claude.revert({ id: "S-1" })).toThrow("Only the user");
+  });
+});
+
+describe("redirects (S-26)", () => {
+  test("free text on a question with options redirects: no decision, still open, inbox line", () => {
+    const q = claude.ask({ title: "Color", body: "x\n\n- A. red\n- B. blue" });
+    claude.inbox();
+    const r = user.answer({ id: q.id, text: "neither, try warmer" });
+    expect(r.id).toBe(q.id);
+    expect(store.get(q.id).status).toBe("open");
+    expect(store.all().filter((c) => c.kind === "decision")).toHaveLength(0);
+    expect(store.get(q.id).comments).toContain("Redirect: neither, try warmer");
+    expect(claude.inbox().map((e) => `${e.action} ${e.detail}`)).toEqual(["redirect neither, try warmer"]);
+  });
+
+  test("a free answer on a question without options still records a decision", () => {
+    const q = claude.ask({ title: "Name?" });
+    expect(user.answer({ id: q.id, text: "Spill" }).kind).toBe("decision");
+    expect(store.get(q.id).status).toBe("answered");
+  });
+});
+
+describe("answers (S-24)", () => {
+  const body = "Pick.\n\n- A. red\n- B. green\n- C. blue";
+
+  test("multi select records every pick in one decision, with Other", () => {
+    const q = claude.ask({ title: "Colors", body, multi: true });
+    expect(store.get(q.id).select).toBe("multi");
+    const d = user.answer({ id: q.id, picks: ["A", "C"], text: "teal" });
+    expect(d.title).toBe("A, C. red; blue; Other: teal");
+    expect(store.get(q.id).status).toBe("answered");
+  });
+
+  test("single select takes one pick; unknown letters and empty answers are refused", () => {
+    const q = claude.ask({ title: "Color", body });
+    expect(store.get(q.id).select).toBeUndefined();
+    expect(() => user.answer({ id: q.id, picks: ["A", "B"] })).toThrow("takes one answer");
+    expect(() => user.answer({ id: q.id, picks: ["Z"] })).toThrow("no option Z");
+    expect(() => user.answer({ id: q.id })).toThrow("An answer is required");
+    expect(user.answer({ id: q.id, picks: ["B"] }).title).toBe("B. green");
+  });
+});
+
 describe("inbox", () => {
   test("returns only user events since the last call", () => {
     const s = claude.draftSpec({ title: "a" });
@@ -120,14 +211,59 @@ describe("mcp", () => {
   const call = (name: string, args: object = {}) =>
     handle(store, { jsonrpc: "2.0", id: 1, method: "tools/call", params: { name, arguments: args } }) as any;
 
-  test("initialize and list the 10 tools", () => {
+  test("initialize and list the 14 tools", () => {
     const init = handle(store, { jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2025-06-18" } }) as any;
     expect(init.result.serverInfo.name).toBe("spill");
     const list = handle(store, { jsonrpc: "2.0", id: 2, method: "tools/list" }) as any;
     expect(list.result.tools.map((t: any) => t.name)).toEqual([
       "spill_board", "spill_get", "spill_ask", "spill_draft_spec", "spill_update",
-      "spill_set_status", "spill_comment", "spill_link", "spill_record", "spill_inbox",
+      "spill_set_status", "spill_comment", "spill_link", "spill_record", "spill_rejections", "spill_focus", "spill_checks", "spill_reply", "spill_inbox",
     ]);
+  });
+
+  test("check results are stored per spec and logged (S-13)", () => {
+    call("spill_draft_spec", { title: "a" });
+    expect(call("spill_checks", { id: "S-1", running: true }).result.content[0].text).toBe("Checks running on S-1");
+    expect(store.checks()["S-1"].running).toBe(true);
+    const r = call("spill_checks", { id: "S-1", results: [{ name: "focus is stored", pass: true }, { name: "weights_sum.py", pass: false, detail: "sum 0.98" }] });
+    expect(r.result.content[0].text).toBe("S-1: 1 of 2 checks pass; failing: weights_sum.py");
+    expect(store.checks()["S-1"]).toMatchObject({ running: false, results: [{ pass: true }, { name: "weights_sum.py", pass: false }] });
+    expect(store.events().at(-1)!.detail).toBe("1 of 2 passed; weights_sum.py failed");
+    expect(call("spill_checks", { id: "S-1" }).result.isError).toBe(true);
+    expect(call("spill_checks", { id: "SEC-1", running: true }).result.isError).toBe(true);
+  });
+
+  test("board-level messages reach the inbox and Claude replies (S-23)", () => {
+    user.message("What is left before v1?");
+    expect(call("spill_inbox").result.content[0].text).toMatch(/user\s+message\s+-\s+What is left before v1\?/);
+    expect(call("spill_reply", { text: "Q-5, then S-13." }).result.content[0].text).toBe("Replied");
+    const last = store.events().at(-1)!;
+    expect([last.actor, last.action, last.card, last.detail]).toEqual(["claude", "reply", "-", "Q-5, then S-13."]);
+    expect(() => user.message("  ")).toThrow(/required/);
+  });
+
+  test("messages carry attachments and a received/working state (S-8)", () => {
+    expect(store.messageState()).toBeNull();
+    const path = store.saveAttachment("../shot one.png", new Uint8Array([1, 2, 3]));
+    expect(path.startsWith(join(dir, "attachments"))).toBe(true);
+    expect(path.endsWith("-shot_one.png")).toBe(true);
+    expect([...readFileSync(path)]).toEqual([1, 2, 3]);
+    const again = store.saveAttachment("shot one.png", new Uint8Array([4]));
+    expect(again).not.toBe(path);
+    expect([...readFileSync(path)]).toEqual([1, 2, 3]);
+    user.message("Search feels slow", [path]);
+    expect(store.messageState()).toBe("received");
+    expect(call("spill_inbox").result.content[0].text).toContain(`Search feels slow [attached: ${path}]`);
+    expect(store.messageState()).toBe("working");
+    call("spill_focus", { discussing: ["SEC-1"] });
+    expect(store.messageState()).toBe("working");
+    call("spill_reply", { text: "Looking." });
+    expect(store.messageState()).toBeNull();
+    user.message("", [path]);
+    expect(store.messageState()).toBe("received");
+    call("spill_inbox");
+    claude.ask({ title: "Which page?" });
+    expect(store.messageState()).toBeNull();
   });
 
   test("notifications get no reply", () => {
@@ -146,5 +282,191 @@ describe("mcp", () => {
     call("spill_link", { from: "S-1", type: "depends_on", to: "SEC-1" });
     expect(store.get("S-1").links).toEqual([{ type: "depends_on", target: "SEC-1" }]);
     expect(store.events().every((e) => e.actor === "claude")).toBe(true);
+  });
+});
+
+describe("spotlight", () => {
+  const call = (name: string, args: object = {}) =>
+    handle(store, { jsonrpc: "2.0", id: 1, method: "tools/call", params: { name, arguments: args } }) as any;
+
+  test("focus is stored, logged, and shown on the board", () => {
+    claude.draftSpec({ title: "a" });
+    claude.draftSpec({ title: "b" });
+    const r = call("spill_focus", { discussing: ["S-1"], next: ["S-2", "SEC-1"], note: "header lines" });
+    expect(r.result.content[0].text).toBe("Spotlight: discussing S-1; next S-2, SEC-1 (header lines)");
+    expect(store.focus()).toMatchObject({ discussing: ["S-1"], next: ["S-2", "SEC-1"], note: "header lines" });
+    expect(store.events().at(-1)).toMatchObject({ actor: "claude", action: "focus", card: "S-1" });
+    expect(call("spill_board").result.content[0].text.split("\n")[0]).toBe("Spotlight: discussing S-1; next S-2, SEC-1 (header lines)");
+  });
+
+  test("unknown IDs are refused and change nothing", () => {
+    claude.draftSpec({ title: "a" });
+    claude.setFocus({ discussing: ["S-1"] });
+    const r = call("spill_focus", { discussing: ["S-9"] });
+    expect(r.result.isError).toBe(true);
+    expect(store.focus()!.discussing).toEqual(["S-1"]);
+  });
+
+  test("clear removes the spotlight", () => {
+    claude.draftSpec({ title: "a" });
+    claude.setFocus({ next: ["S-1"] });
+    expect(call("spill_focus", { clear: true }).result.content[0].text).toBe("Spotlight cleared");
+    expect(store.focus()).toBeNull();
+    expect(call("spill_board").result.content[0].text.split("\n")[0]).toBe("Spotlight: none");
+  });
+});
+
+describe("rejection queue", () => {
+  const call = (name: string, args: object = {}) =>
+    handle(store, { jsonrpc: "2.0", id: 1, method: "tools/call", params: { name, arguments: args } }) as any;
+  const text = (name: string, args: object = {}) => call(name, args).result.content[0].text as string;
+
+  test("a rejection waits with its reason and heads the board and inbox", () => {
+    claude.draftSpec({ title: "a" });
+    user.setStatus({ id: "S-1", status: "rejected", note: "too broad" });
+    expect(text("spill_rejections")).toMatch(/^S-1 a\n  rejected .*: too broad$/);
+    expect(text("spill_board").split("\n")[0]).toBe("Rejections waiting: S-1 (see spill_rejections)");
+    expect(text("spill_inbox").split("\n")[0]).toBe("Rejections waiting: S-1 (see spill_rejections)");
+  });
+
+  test("moving the card to discussing empties the queue; re-rejecting brings it back", () => {
+    claude.draftSpec({ title: "a" });
+    user.setStatus({ id: "S-1", status: "rejected", note: "first" });
+    claude.setStatus({ id: "S-1", status: "discussing" });
+    expect(text("spill_rejections")).toBe("No rejections waiting.");
+    user.setStatus({ id: "S-1", status: "rejected", note: "second" });
+    expect(text("spill_rejections")).toMatch(/: second$/);
+  });
+
+  test("resolve keeps the card rejected, comments, and empties the queue", () => {
+    claude.draftSpec({ title: "a" });
+    user.setStatus({ id: "S-1", status: "rejected", note: "no" });
+    expect(text("spill_rejections", { resolve: "S-1", note: "dropping it" })).toBe("Resolved S-1; it stays rejected");
+    expect(store.get("S-1").status).toBe("rejected");
+    expect(store.get("S-1").comments).toContain("dropping it");
+    expect(text("spill_rejections")).toBe("No rejections waiting.");
+    expect(call("spill_rejections", { resolve: "S-1", note: "again" }).result.isError).toBe(true);
+  });
+});
+
+describe("approval separate from building (S-29)", () => {
+  const reqs = "## Requirements\n1. one\n2. two\n";
+  const status = (id: string) => store.get(id).status;
+  const autoLine = () => store.events().filter((e) => e.actor === "auto").map((e) => `${e.card} ${e.detail}`);
+
+  test("Build queues an approved spec; only queued specs can be started; reject still works", () => {
+    claude.draftSpec({ title: "a" });
+    expect(() => user.build({ id: "S-1" })).toThrow(/only an approved spec/);
+    user.setStatus({ id: "S-1", status: "approved" });
+    expect(() => claude.setStatus({ id: "S-1", status: "active" })).toThrow(/queued with Build/);
+    expect(() => claude.build({ id: "S-1" })).toThrow(/Only the user/);
+    claude.inbox();
+    user.build({ id: "S-1" });
+    expect(claude.inbox().map((e) => e.detail)).toEqual(["approved -> queued"]);
+    claude.setStatus({ id: "S-1", status: "active" });
+    claude.draftSpec({ title: "b" });
+    user.setStatus({ id: "S-2", status: "approved" });
+    user.setStatus({ id: "S-2", status: "rejected", note: "not now" });
+    expect(status("S-2")).toBe("rejected");
+  });
+
+  test("the last blocking question answered auto-approves; another open question holds it", () => {
+    claude.draftSpec({ title: "a" });
+    claude.ask({ title: "q1", body: "x\n\n- A. yes\n- B. no", blocks: ["S-1"] });
+    claude.ask({ title: "q2", body: "x\n\n- A. yes\n- B. no", blocks: ["S-1"] });
+    user.answer({ id: "Q-1", picks: ["A"] });
+    expect(status("S-1")).toBe("draft");
+    claude.inbox();
+    user.answer({ id: "Q-2", picks: ["B"] });
+    expect(status("S-1")).toBe("approved");
+    expect(autoLine()).toEqual(["S-1 draft -> approved (auto: all questions answered)"]);
+    expect(claude.inbox().some((e) => e.actor === "auto")).toBe(true);
+  });
+
+  test("every child spec done auto-approves the parent", () => {
+    claude.draftSpec({ title: "parent" });
+    for (const t of ["c1", "c2"]) {
+      claude.draftSpec({ title: t, depends_on: ["S-1"] });
+    }
+    for (const id of ["S-2", "S-3"]) user.setStatus({ id, status: "approved" }), user.build({ id });
+    claude.setStatus({ id: "S-2", status: "active" });
+    claude.setStatus({ id: "S-2", status: "done" });
+    expect(status("S-1")).toBe("draft");
+    claude.setStatus({ id: "S-3", status: "active" });
+    claude.setStatus({ id: "S-3", status: "done" });
+    expect(status("S-1")).toBe("approved");
+    expect(autoLine()).toEqual(["S-1 draft -> approved (auto: all child specs done)"]);
+  });
+
+  test("Reqs 1-n done covering every requirement auto-approves, unless a question is open", () => {
+    claude.draftSpec({ title: "a", body: reqs });
+    claude.comment({ id: "S-1", text: "Req 1 done" });
+    expect(status("S-1")).toBe("draft");
+    claude.comment({ id: "S-1", text: "Req 2 done" });
+    expect(status("S-1")).toBe("approved");
+    expect(autoLine()).toEqual(["S-1 draft -> approved (auto: all requirements met)"]);
+    claude.draftSpec({ title: "b", body: reqs });
+    claude.ask({ title: "q", body: "x\n\n- A. yes", blocks: ["S-2"] });
+    claude.comment({ id: "S-2", text: "Reqs 1-2 done" });
+    expect(status("S-2")).toBe("draft");
+  });
+
+  test("a design question answered A approves with design approved; B does not", () => {
+    claude.draftSpec({ title: "a" });
+    expect(() => claude.ask({ title: "d", design: true })).toThrow(/must block/);
+    const q = claude.ask({ title: "Design for S-1", body: "Board: https://app.paper.design/file/x", blocks: ["S-1"], design: true });
+    expect(q.design).toBe(true);
+    expect(q.body).toContain("- A. Approve this design\n- B. Needs changes");
+    expect(parseCard(formatCard(q)).design).toBe(true);
+    user.answer({ id: q.id, text: "make it blue" });
+    expect(status(q.id)).toBe("open");
+    user.answer({ id: q.id, picks: ["A"] });
+    expect(status("S-1")).toBe("approved");
+    expect(autoLine()).toEqual(["S-1 draft -> approved (auto: design approved)"]);
+    claude.draftSpec({ title: "b" });
+    claude.ask({ title: "Design for S-2", blocks: ["S-2"], design: true });
+    user.answer({ id: "Q-2", picks: ["B"] });
+    expect(status("S-2")).toBe("draft");
+  });
+});
+
+describe("message threads (S-30)", () => {
+  const call = (name: string, args: object = {}) =>
+    (handle(store, { jsonrpc: "2.0", id: 1, method: "tools/call", params: { name, arguments: args } }) as any).result.content[0].text as string;
+  const msgs = () => store.events().filter((e) => e.card === "-");
+
+  test("replies go to the latest open thread or a named one; inbox lines name the thread", () => {
+    user.message("first");
+    const t1 = msgs()[0].at;
+    claude.message("answer one");
+    Bun.sleepSync(2);
+    user.message("second");
+    const t2 = msgs()[2].at;
+    expect(store.messageState()).toBe("received");
+    Bun.sleepSync(2);
+    user.message("follow up", [], t1);
+    const lines = call("spill_inbox").split("\n");
+    expect(lines[0]).toMatch(/first  \(new thread\)$/);
+    expect(lines[2]).toContain(`follow up  (in thread of ${t1.slice(0, 16).replace("T", " ")})`);
+    // Default: the latest open thread, which is t1 now (its follow up is newest).
+    claude.message("answer follow up");
+    expect(msgs().at(-1)!.thread).toBe(t1);
+    // t2 is still waiting; its message is not the latest, so the button settles on t1's reply.
+    expect(store.messageState()).toBeNull();
+    expect(call("spill_reply", { text: "answer two", thread: t2.slice(0, 16).replace("T", " ") })).toBe("Replied");
+    expect(msgs().at(-1)!.thread).toBe(t2);
+    expect(() => user.message("x", [], "2001-01-01T00:00:00.000Z")).toThrow(/No thread/);
+  });
+
+  test("a reply in another thread does not settle the latest message", () => {
+    user.message("a");
+    const t1 = msgs()[0].at;
+    Bun.sleepSync(2); // threads are named by time; keep the two apart
+    user.message("b");
+    claude.message("for a", [], t1);
+    expect(store.messageState()).toBe("received");
+    claude.inbox();
+    claude.message("for a again", [], t1);
+    expect(store.messageState()).toBe("working");
   });
 });

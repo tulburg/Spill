@@ -1,8 +1,9 @@
-import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 
 export type Kind = "spec" | "question" | "decision" | "section";
-export type Actor = "user" | "claude";
+// S-29: "auto" marks an approval the board made itself (D-11).
+export type Actor = "user" | "claude" | "auto";
 
 export interface Link {
   type: string;
@@ -16,6 +17,10 @@ export interface Card {
   status: string;
   section: string | null;
   links: Link[];
+  // S-24: questions only; "multi" means pick any number of the options.
+  select?: "multi";
+  // S-29: questions only; a design approval question. Answer A approves the spec it blocks.
+  design?: true;
   // Text between the front matter and the "## Comments" heading, kept verbatim.
   body: string;
   // Text after the "## Comments" heading, kept verbatim.
@@ -28,6 +33,8 @@ export interface SpillEvent {
   action: string;
   card: string;
   detail?: string;
+  // S-30: board messages only; the time of the thread's first message.
+  thread?: string;
 }
 
 export const PREFIX: Record<Kind, string> = { spec: "S", question: "Q", decision: "D", section: "SEC" };
@@ -87,6 +94,8 @@ export function parseCard(text: string): Card {
     status: fields.status ?? "draft",
     section: fields.section ?? null,
     links,
+    ...(fields.select === "multi" ? { select: "multi" as const } : {}),
+    ...(fields.design === "true" ? { design: true as const } : {}),
     body,
     comments,
   };
@@ -102,6 +111,8 @@ export function formatCard(c: Card): string {
     `title: ${formatValue(c.title)}`,
     `status: ${c.status}`,
     `section: ${formatValue(c.section)}`,
+    ...(c.select ? [`select: ${c.select}`] : []),
+    ...(c.design ? ["design: true"] : []),
     links,
   ].join("\n");
   let body = c.body;
@@ -114,6 +125,20 @@ export interface Config {
   statuses: { spec: string[]; question: string[] };
   userOnlyStatuses: string[];
   maxActiveSpecs: number;
+}
+
+export interface Focus {
+  discussing: string[];
+  next: string[];
+  note?: string;
+  at: string;
+}
+
+// S-13: the latest acceptance check run for a spec, written by Claude (D-4).
+export interface CheckRun {
+  at: string;
+  running: boolean;
+  results: { name: string; pass: boolean; detail?: string }[];
 }
 
 interface State {
@@ -133,10 +158,15 @@ export class Store {
 
   config(): Config {
     const raw = JSON.parse(readFileSync(join(this.dir, "config.json"), "utf8"));
+    const statuses = raw.statuses ?? { spec: [], question: [] };
+    // S-29: boards made before queued existed get it after approved.
+    if (statuses.spec.includes("approved") && !statuses.spec.includes("queued")) statuses.spec.splice(statuses.spec.indexOf("approved") + 1, 0, "queued");
+    const userOnly: string[] = raw.userOnlyStatuses ?? ["approved", "rejected"];
+    if (!userOnly.includes("queued")) userOnly.push("queued");
     return {
       project: raw.project ?? "",
-      statuses: raw.statuses ?? { spec: [], question: [] },
-      userOnlyStatuses: raw.userOnlyStatuses ?? ["approved", "rejected"],
+      statuses,
+      userOnlyStatuses: userOnly,
       maxActiveSpecs: raw.maxActiveSpecs ?? 1,
     };
   }
@@ -211,11 +241,61 @@ export class Store {
       .map((l) => JSON.parse(l));
   }
 
-  // User events since the last call, then advance the cursor.
+  // The spotlight: what Claude is discussing now and what comes next. Null when cleared.
+  focus(): Focus | null {
+    const p = join(this.dir, "focus.json");
+    return existsSync(p) ? JSON.parse(readFileSync(p, "utf8")) : null;
+  }
+
+  saveFocus(f: Focus | null): void {
+    const p = join(this.dir, "focus.json");
+    if (f) writeFileSync(p, JSON.stringify(f, null, 2) + "\n");
+    else if (existsSync(p)) rmSync(p);
+  }
+
+  checks(): Record<string, CheckRun> {
+    const p = join(this.dir, "checks.json");
+    return existsSync(p) ? JSON.parse(readFileSync(p, "utf8")) : {};
+  }
+
+  saveChecks(id: string, run: CheckRun): void {
+    const all = this.checks();
+    all[id] = run;
+    writeFileSync(join(this.dir, "checks.json"), JSON.stringify(all, null, 2) + "\n");
+  }
+
+  // S-8: a file sent with a message, saved under .spill/attachments/. Returns its absolute path.
+  saveAttachment(name: string, bytes: Uint8Array): string {
+    const dir = join(this.dir, "attachments");
+    if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+    const safe = (name.split(/[\\/]/).pop() || "file").replace(/[^\w.-]+/g, "_").slice(-80);
+    const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+    // Two files with the same name in one message must not overwrite each other.
+    let p = join(dir, `${stamp}-${safe}`);
+    for (let n = 2; existsSync(p); n++) p = join(dir, `${stamp}-${n}-${safe}`);
+    writeFileSync(p, bytes);
+    return p;
+  }
+
+  // S-8: where the user's latest board message stands. "received" until Claude reads it in the
+  // inbox, then "working" until Claude replies or makes its next board change.
+  messageState(): "received" | "working" | null {
+    const all = this.events();
+    const i = all.findLastIndex((e) => e.actor === "user" && e.action === "message");
+    if (i < 0) return null;
+    const after = all.slice(i + 1);
+    const thread = all[i].thread ?? all[i].at;
+    if (after.some((e) => e.actor === "claude" && e.action === "reply" && (e.thread ?? thread) === thread)) return null;
+    const cursor = this.state().inboxCursor;
+    if (cursor <= i) return "received";
+    return all.slice(cursor).some((e) => e.actor === "claude" && e.action !== "focus" && !(e.action === "reply" && (e.thread ?? thread) !== thread)) ? null : "working";
+  }
+
+  // User and auto-approval events since the last call, then advance the cursor.
   takeInbox(): SpillEvent[] {
     const all = this.events();
     const s = this.state();
-    const fresh = all.slice(s.inboxCursor).filter((e) => e.actor === "user");
+    const fresh = all.slice(s.inboxCursor).filter((e) => e.actor !== "claude");
     s.inboxCursor = all.length;
     this.saveState(s);
     return fresh;

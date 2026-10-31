@@ -26,6 +26,9 @@ Prose (chat replies, commit messages, PR text, markdown, comments):
 - Work directly on `main`: no feature branches, worktrees, or pull requests. Commit only when asked.
 - Match the style of the code you're editing.
 - Verify a change by running it (tests, the app, the browser), not by reading it.
+- UI design changes are drawn in Paper first (file "Spill", page "Work board v2"), then built.
+- Test Approve and Reject on a copy of the board (`.spill/` copied to a scratch folder, served on
+  another port), never on the real board.
 
 ## 4. Specs live in Spill
 
@@ -36,10 +39,15 @@ start of every session that touches product behavior.
 
 The short version:
 - **Specs before code.** No feature code without an `approved` spec. Draft it on the board first.
+- **Build means build.** Approved is not a go. When the user presses Build (the spec is `queued`),
+  start building it without waiting to be asked (one active spec at a time, in the order queued).
 - **Questions go on the board, not only in chat.** Every question you need answered becomes a
   `Q-n` card. Check the board for answers (and for questions the user added) before asking again.
 - **Move cards as you work.** Set a spec `active` when you start it and `done` when it ships.
   Only one spec is `active` per session unless the user says otherwise.
-- **Never approve or reject your own cards.** Only the user moves a card to `approved` or `rejected`.
+- **An answer that picks none of the options is a redirect.** Rewrite and reopen the same question;
+  do not record it as a decision or open a new question.
+- **Never approve or reject your own cards.** Only the user moves a card to `approved`, `queued` or `rejected`
+  (the board can also auto-approve; that is not you).
 - If the Spill MCP server is not connected, use the file fallback in `.spill/` described in
   `SPILL.md`, and say so once.

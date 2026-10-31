@@ -6,6 +6,7 @@
       "draft",
       "discussing",
       "approved",
+      "queued",
       "rejected",
       "active",
       "done"
@@ -18,6 +19,7 @@
   },
   "userOnlyStatuses": [
     "approved",
+    "queued",
     "rejected"
   ],
   "maxActiveSpecs": 1
