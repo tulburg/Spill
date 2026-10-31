@@ -1,0 +1,1 @@
+{"at":"2026-10-31T01:07:24.552Z","actor":"claude","action":"status","card":"S-16","detail":"active -> discussing: Built on branch spill-mcp: src/store.ts (card files, IDs, events), src/board.ts (rules), src/mcp.ts (stdio server), src/cli.ts (spill command), test/spill.test.ts (15 passing). Back to discussing until you approve it with: spill approve S-16"}

@@ -87,3 +87,17 @@ up when it next opens the project.
 
 Once Spill is installed, copy `.spill/mcp.example.json` into the project's `.mcp.json` (or merge
 its `spill` entry) and restart Claude Code. `spill_board` should then return the board.
+
+## 6. User commands
+
+Until the canvas app exists, the user changes the board with the `spill` command. These are the
+only way to set `approved` or `rejected`, and each one shows up in Claude's next `spill_inbox`:
+
+```
+spill board                     spill approve S-n [note]
+spill show ID                   spill reject S-n reason
+spill answer Q-n text           spill comment ID text
+spill ask "title" [body]        spill log [n]
+```
+
+Every change, from either side, is appended to `.spill/events.jsonl`.
