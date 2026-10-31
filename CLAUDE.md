@@ -23,7 +23,7 @@ Prose (chat replies, commit messages, PR text, markdown, comments):
 
 ## 3. Repo etiquette
 
-- Branch off `main`; land changes via pull request (do not push to `main`).
+- Work directly on `main`: no feature branches, worktrees, or pull requests. Commit only when asked.
 - Match the style of the code you're editing.
 - Verify a change by running it (tests, the app, the browser), not by reading it.
 
