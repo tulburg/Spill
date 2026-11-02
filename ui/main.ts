@@ -1,5 +1,7 @@
-import type { Card, CheckRun, Focus, SpillEvent } from "../src/store";
+import { lineDiff } from "../src/diff";
+import type { Card, CheckRun, Focus, SpillEvent, Version } from "../src/store";
 import { type Thread, threads } from "../src/threads";
+import { pendingUpdate } from "../src/updates";
 
 interface BoardData {
   project: string;
@@ -12,6 +14,10 @@ interface BoardData {
   // S-30: every board message, older than the event window too.
   messages?: SpillEvent[];
   root?: string;
+  // S-34: versions of every spec whose text has changed, oldest first.
+  versions?: Record<string, (Version & { approved: boolean })[]>;
+  // S-35: the files Claude recorded building each spec.
+  files?: Record<string, { path: string; change: "new" | "changed" | "removed" }[]>;
 }
 
 interface Node {
@@ -50,6 +56,7 @@ const ICON = {
   draft: `<svg width="16" height="16" viewBox="0 0 14 14"><circle cx="7" cy="7" r="6" fill="none" stroke="#A1A1AA" stroke-width="1.4" stroke-dasharray="2.2 2"/></svg>`,
   discussing: `<svg width="16" height="16" viewBox="0 0 14 14"><circle cx="7" cy="7" r="6" fill="none" stroke="#D97706" stroke-width="1.4"/><path d="M7 7V1a6 6 0 0 1 6 6z" fill="#D97706"/></svg>`,
   rejected: `<svg width="16" height="16" viewBox="0 0 14 14"><circle cx="7" cy="7" r="6" fill="none" stroke="#A1A1AA" stroke-width="1.4"/><path d="M4.8 4.8l4.4 4.4M9.2 4.8l-4.4 4.4" stroke="#A1A1AA" stroke-width="1.4" stroke-linecap="round"/></svg>`,
+  replaced: `<svg width="16" height="16" viewBox="0 0 14 14"><circle cx="7" cy="7" r="6" fill="none" stroke="#A1A1AA" stroke-width="1.4"/><path d="M4 7h6" stroke="#A1A1AA" stroke-width="1.4" stroke-linecap="round"/></svg>`,
   done: `<svg width="16" height="16" viewBox="0 0 14 14"><circle cx="7" cy="7" r="6.5" fill="#A1A1AA"/><path d="M4.3 7.2l1.8 1.8 3.6-3.8" fill="none" stroke="#FAFAFA" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
   question: `<svg width="16" height="16" viewBox="0 0 14 14"><circle cx="7" cy="7" r="6" fill="none" stroke="#D97706" stroke-width="1.4"/><path d="M5.4 5.4a1.7 1.7 0 1 1 2.3 1.6c-.5.2-.7.5-.7 1v.3" fill="none" stroke="#D97706" stroke-width="1.3" stroke-linecap="round"/><circle cx="7" cy="10.2" r=".8" fill="#D97706"/></svg>`,
   questionDone: `<svg width="16" height="16" viewBox="0 0 14 14"><circle cx="7" cy="7" r="6" fill="none" stroke="#A1A1AA" stroke-width="1.4"/><path d="M4.5 7.2l1.7 1.7 3.3-3.4" fill="none" stroke="#A1A1AA" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
@@ -63,10 +70,11 @@ const SPEC_STATUS_LABEL: Record<string, string> = {
   draft: "Draft",
   discussing: "Needs your approval",
   approved: "Approved",
-  queued: "Queued to build",
+  queued: "Queued",
   active: "Claude building",
   rejected: "Rejected",
   done: "Done",
+  replaced: "Replaced",
 };
 
 // ---------- data helpers ----------
@@ -230,6 +238,22 @@ function buildingGroup(): HTMLElement | null {
     );
   if (!c) return null;
   const since = activeSince(c);
+  const held = stalledOn(c);
+  const quiet = quietFor(c);
+  if (quiet)
+    return h(
+      "div",
+      { class: "group" },
+      h("div", { class: "hd" }, h("b", { class: "quiet" }, "No update from Claude")),
+      h("div", { class: "item build quiet", onclick: () => panTo(c.id) }, h("div", { class: "top" }, h("span", { class: "id" }, c.id), h("span", { class: "t" }, c.title)), h("div", { class: "why" }, `Still active, but Claude has not updated the board in ${quietLabel(quiet).replace("No update in ", "")}. Its session may have stopped.`)),
+    );
+  if (held.length)
+    return h(
+      "div",
+      { class: "group" },
+      h("div", { class: "hd" }, h("b", { class: "waiting" }, "Waiting on you")),
+      h("div", { class: "item build held", onclick: () => panTo(held[0].id) }, h("div", { class: "top" }, h("span", { class: "id" }, c.id), h("span", { class: "t" }, c.title)), h("div", { class: "why" }, `${waitingLabel(held)} before building can go on`)),
+    );
   return h(
     "div",
     { class: "group" },
@@ -250,7 +274,7 @@ function hasChecks(c: Card): boolean {
 function isOpen(c: Card | undefined): boolean {
   if (!c) return false;
   if (c.kind === "question") return c.status === "open";
-  if (c.kind === "spec") return !["approved", "queued", "active", "done"].includes(c.status);
+  if (c.kind === "spec") return !["approved", "queued", "active", "done", "replaced"].includes(c.status);
   return false;
 }
 
@@ -260,6 +284,30 @@ function waitsOn(c: Card): Card[] {
     .map((id) => byId.get(id))
     .filter((b): b is Card => isOpen(b));
 }
+
+// An active spec held by open questions is not being built: Claude is waiting on the user.
+function stalledOn(c: Card): Card[] {
+  return c.kind === "spec" && c.status === "active" ? waitsOn(c).filter((q) => q.kind === "question") : [];
+}
+const waitingLabel = (qs: Card[]) => `Waiting on ${qs.map((q) => q.id).join(", ")}`;
+
+// An active spec Claude has not touched the board about for a while has probably stopped: the
+// session ended or moved on without updating it. Shown as quiet rather than building.
+const QUIET_MIN = 20;
+function quietFor(c: Card): number {
+  if (c.kind !== "spec" || c.status !== "active" || stalledOn(c).length) return 0;
+  const last = [activeSince(c), data.events.findLast((e) => e.actor === "claude")?.at].filter(Boolean).sort().at(-1);
+  if (!last) return 0;
+  const mins = Math.floor((Date.now() - Date.parse(last)) / 60000);
+  return mins >= QUIET_MIN ? mins : 0;
+}
+const quietLabel = (mins: number) => `No update in ${mins >= 60 ? `${Math.floor(mins / 60)}h` : `${mins}m`}`;
+// Quiet is time-based, so redraw now and then while a spec is active.
+setInterval(() => {
+  if (!data.cards.some((x) => x.kind === "spec" && x.status === "active")) return;
+  if (mouseDown) renderPending = true;
+  else render();
+}, 60000);
 
 function blocksOpen(c: Card): Card[] {
   return data.cards.filter((o) => waitsOn(o).some((b) => b.id === c.id));
@@ -317,7 +365,16 @@ function buildTree(): Node[] {
     const children = (kids.get(c.id) ?? []).filter((k) => !seen.has(k.id)).sort(order).map((k) => make(k, depth + 1));
     return { card: c, depth, children };
   };
-  return roots.sort(order).map((c) => make(c, 0));
+  // S-35: a branched spec is drawn right after the done spec it follows.
+  const sorted = roots.sort(order);
+  const followed = (c: Card) => linksOf(c, "follows").find((id) => sorted.some((r) => r.id === id));
+  const placed = sorted.filter((c) => !followed(c));
+  for (const c of sorted.filter((c) => followed(c))) {
+    let i = placed.findIndex((r) => r.id === followed(c));
+    while (i + 1 < placed.length && followed(placed[i + 1]) === followed(c)) i++;
+    placed.splice(i + 1, 0, c);
+  }
+  return placed.map((c) => make(c, 0));
 }
 
 // ---------- actions ----------
@@ -356,13 +413,28 @@ function panTo(id: string, smooth = true) {
 
 // ---------- spotlight (S-18) ----------
 
-let spotHidden = false;
+// S-31: the bottom-left panel starts open and stays as the user leaves it (D-14).
+let panelCollapsed = (() => {
+  try {
+    return localStorage.getItem("spill.panel") === "collapsed";
+  } catch {
+    return false;
+  }
+})();
+function togglePanel() {
+  panelCollapsed = !panelCollapsed;
+  try {
+    localStorage.setItem("spill.panel", panelCollapsed ? "collapsed" : "open");
+  } catch {}
+  render();
+}
 let spotSeen = "";
 const sectionOf = new Map<string, string>();
 
 function spotRole(id: string): { now: boolean; next: number } {
   const f = data.focus;
-  return { now: !!f?.discussing.includes(id), next: f ? f.next.indexOf(id) + 1 : 0 };
+  const holding = data.cards.some((c) => stalledOn(c).some((q) => q.id === id));
+  return { now: holding || !!f?.discussing.includes(id), next: f ? f.next.indexOf(id) + 1 : 0 };
 }
 
 function spotItem(id: string, n?: number): HTMLElement {
@@ -383,6 +455,8 @@ function spotClass(c: Card): string {
 
 function spotTag(c: Card): HTMLElement | null {
   const r = spotRole(c.id);
+  if (stalledOn(c).length) return h("span", { class: "spot-tag waiting" }, waitingLabel(stalledOn(c)));
+  if (quietFor(c)) return h("span", { class: "spot-tag quiet" }, quietLabel(quietFor(c)));
   if (c.kind === "spec" && c.status === "active") return h("span", { class: "spot-tag build" }, h("i", {}), "Building");
   if (r.now) return h("span", { class: "spot-tag now" }, "In discussion");
   if (r.next) return h("span", { class: "spot-tag" }, `Next ${r.next}`);
@@ -410,18 +484,27 @@ function rejectionsPanel(): HTMLElement | null {
 
 // The spotlight lives in the bottom-left panel, above recent decisions.
 // S-28: specs waiting on the user's approval, unblocked ones first, oldest first.
-function pendingGroup(): HTMLElement | null {
-  const since = (c: Card) => lastStatusEvent(c)?.at ?? firstEvent(c.id)?.at ?? "";
-  const blockers = (c: Card) => waitsOn(c).filter((q) => q.kind === "question");
-  // A spec already showing in the spotlight is not hidden, so it is not listed again.
+const statusSince = (c: Card) => lastStatusEvent(c)?.at ?? firstEvent(c.id)?.at ?? "";
+// Specs already showing in the spotlight are not listed again in the groups below it.
+function inSpotlight(): Set<string> {
   const f = data.focus;
-  const shown = new Set(f && !spotHidden ? [...(data.cards.some((c) => c.kind === "spec" && c.status === "active") ? [] : f.discussing), ...f.next] : []);
+  return new Set(f ? [...(data.cards.some((c) => c.kind === "spec" && c.status === "active") ? [] : f.discussing), ...f.next] : []);
+}
+function pendingSpecs(): Card[] {
+  const since = statusSince;
+  const blockers = (c: Card) => waitsOn(c).filter((q) => q.kind === "question");
+  const shown = inSpotlight();
   const pending = data.cards
     .filter((c) => c.kind === "spec" && ["draft", "discussing"].includes(c.status) && !shown.has(c.id))
     .sort((a, b) => Number(blockers(a).length > 0) - Number(blockers(b).length > 0) || since(a).localeCompare(since(b)));
   // S-29 req 10: approved specs waiting for Build come after the unapproved ones.
   const ready = data.cards.filter((c) => c.kind === "spec" && c.status === "approved" && !shown.has(c.id)).sort((a, b) => since(a).localeCompare(since(b)));
-  const specs = [...pending, ...ready];
+  return [...pending, ...ready];
+}
+function pendingGroup(): HTMLElement | null {
+  const since = statusSince;
+  const blockers = (c: Card) => waitsOn(c).filter((q) => q.kind === "question");
+  const specs = pendingSpecs();
   if (!specs.length) return null;
   return h(
     "div",
@@ -444,15 +527,117 @@ function spotlightPanel(): HTMLElement | null {
   const f = data.focus;
   const building = buildingGroup();
   if (!f) return building;
-  const toggle = h("button", { class: "link", onclick: () => ((spotHidden = !spotHidden), render()) }, spotHidden ? "Show" : "Hide");
-  if (spotHidden) return h("div", { class: "group" }, h("div", { class: "hd" }, h("b", {}, "Spotlight"), toggle));
-  if (building) building.querySelector(".hd")!.append(toggle);
   return h(
     "div",
     { class: "group" },
-    ...(building ? [building] : [h("div", { class: "hd" }, h("b", { class: "now" }, h("i", {}), "Discussing"), toggle), ...f.discussing.map((id) => spotItem(id)), f.note ? h("div", { class: "note" }, f.note) : null]),
-    f.next.length ? h("div", { class: "hd sub" }, h("b", {}, "Up next")) : null,
+    ...(building ? [building] : [h("div", { class: "hd" }, f.discussing.length || f.note ? h("b", { class: "now" }, h("i", {}), "Discussing") : h("b", {}, "Spotlight")), ...f.discussing.map((id) => spotItem(id)), f.note ? h("div", { class: "note" }, f.note) : null]),
+    f.next.length ? h("div", { class: "hd sub" }, h("b", { class: "now" }, "Up next in the spotlight")) : null,
     f.next.map((id, i) => spotItem(id, i + 1)),
+  );
+}
+
+// S-31: queued specs in the order Build was pressed, and the latest shipped specs.
+function queuedSpecs(): Card[] {
+  const shown = inSpotlight();
+  return data.cards.filter((c) => c.kind === "spec" && c.status === "queued" && !shown.has(c.id)).sort((a, b) => statusSince(a).localeCompare(statusSince(b)));
+}
+function builtSpecs(): Card[] {
+  return data.cards.filter((c) => c.kind === "spec" && c.status === "done").sort((a, b) => statusSince(b).localeCompare(statusSince(a)));
+}
+const decisionCards = () => data.cards.filter((c) => c.kind === "decision").sort((a, b) => num(b.id) - num(a.id));
+const openQuestions = () => data.cards.filter((c) => c.kind === "question" && c.status === "open" && redirectNote(c) === null);
+
+function upNextGroup(): HTMLElement | null {
+  const specs = queuedSpecs();
+  if (!specs.length) return null;
+  return h(
+    "div",
+    { class: "group" },
+    h("div", { class: "hd" }, h("b", {}, "Up next"), specs.length > 3 ? h("span", {}, `All ${specs.length}`) : null),
+    specs.slice(0, 3).map((c, i) => h("div", { class: "item queued", onclick: () => panTo(c.id) }, h("span", { class: "k" }, String(i + 1)), h("span", { class: "id" }, c.id), h("span", { class: "t" }, c.title))),
+  );
+}
+function lastBuiltGroup(): HTMLElement | null {
+  const specs = builtSpecs();
+  if (!specs.length) return null;
+  return h(
+    "div",
+    { class: "group" },
+    h("div", { class: "hd" }, h("b", { class: "built" }, "Last built"), specs.length > 3 ? h("span", {}, `All ${specs.length}`) : null),
+    specs.slice(0, 3).map((c) => {
+      const at = statusSince(c);
+      return h("div", { class: "item built", onclick: () => panTo(c.id) }, svg(CHIP.built), h("span", { class: "id" }, c.id), h("span", { class: "t" }, c.title), at ? h("span", { class: "a" }, ago(at).replace(" ago", "")) : null);
+    }),
+  );
+}
+function decisionsGroup(): HTMLElement | null {
+  const decisions = decisionCards();
+  if (!decisions.length) return null;
+  return h(
+    "div",
+    { class: "group" },
+    // S-12 req 4: All opens the decisions log (S-7).
+    h("div", { class: "hd" }, h("b", {}, "Recent decisions"), h("button", { class: "link", onclick: () => openSearch(null, "D-") }, `All ${decisions.length}`)),
+    decisions.slice(0, 3).map((d) => {
+      const e = firstEvent(d.id);
+      return h(
+        "div",
+        {
+          class: "item",
+          onmouseenter: () => focus([d.id, ...changedBy(d)]),
+          onmouseleave: unfocus,
+          onclick: () => openSheet(d.id, true),
+        },
+        h("span", { class: "id" }, d.id),
+        h("span", { class: "t" }, d.title),
+        e ? h("span", { class: "a" }, ago(e.at).replace(" ago", "")) : null,
+      );
+    }),
+  );
+}
+
+const CHIP = {
+  rejected: `<svg width="12" height="12" viewBox="0 0 12 12"><circle cx="6" cy="6" r="5" fill="none" stroke="#B91C1C" stroke-width="1.4"/><path d="M4.2 4.2l3.6 3.6M7.8 4.2l-3.6 3.6" stroke="#B91C1C" stroke-width="1.4" stroke-linecap="round"/></svg>`,
+  held: `<svg width="12" height="12" viewBox="0 0 12 12"><circle cx="6" cy="6" r="4.6" fill="none" stroke="#F59E0B" stroke-width="1.6"/><path d="M4.6 4v4M7.4 4v4" stroke="#B45309" stroke-width="1.4" stroke-linecap="round"/></svg>`,
+  quiet: `<svg width="12" height="12" viewBox="0 0 12 12"><circle cx="6" cy="6" r="4.6" fill="none" stroke="#A1A1AA" stroke-width="1.6" stroke-dasharray="1.8 1.6"/></svg>`,
+  spot: `<svg width="12" height="12" viewBox="0 0 12 12"><circle cx="6" cy="6" r="4.5" fill="none" stroke="#6366F1" stroke-width="1.4"/><circle cx="6" cy="6" r="2" fill="#6366F1"/></svg>`,
+  question: `<svg width="12" height="12" viewBox="0 0 12 12"><circle cx="6" cy="6" r="5" fill="#F59E0B"/><path d="M4.6 4.7a1.5 1.5 0 1 1 2 1.4c-.4.2-.6.5-.6.9" fill="none" stroke="#fff" stroke-width="1.2" stroke-linecap="round"/><circle cx="6" cy="8.7" r=".7" fill="#fff"/></svg>`,
+  pending: `<svg width="12" height="12" viewBox="0 0 12 12"><circle cx="6" cy="6" r="4.5" fill="none" stroke="#B45309" stroke-width="1.4" stroke-dasharray="2 1.6"/></svg>`,
+  queued: `<svg width="12" height="12" viewBox="0 0 12 12"><path d="M3 2.5l4 3.5-4 3.5M7 2.5l3 3.5-3 3.5" fill="none" stroke="#3F3F46" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+  built: `<svg width="12" height="12" viewBox="0 0 12 12"><circle cx="6" cy="6" r="5" fill="#16A34A"/><path d="M3.8 6.2l1.5 1.5 3-3.2" fill="none" stroke="#fff" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+  decision: `<svg width="12" height="12" viewBox="0 0 12 12"><rect x="2.2" y="2.2" width="7.6" height="7.6" rx="1.5" transform="rotate(45 6 6)" fill="none" stroke="#0F766E" stroke-width="1.4"/></svg>`,
+};
+
+// S-31: one chip per group with something in it, at the top of the panel; collapsed, it is the whole panel.
+function countsRow(): HTMLElement {
+  const chip = (cls: string, icon: string, n: number | string, title: string) => h("span", { class: `chip ${cls}`, title }, svg(icon), h("span", {}, String(n)));
+  const active = data.cards.find((x) => x.kind === "spec" && x.status === "active");
+  const held = active ? stalledOn(active) : [];
+  const quiet = active ? quietFor(active) : 0;
+  const f = data.focus;
+  const spot = f ? f.discussing.length + f.next.length : 0;
+  const rejections = data.rejections?.length ?? 0;
+  const chips = [
+    rejections ? chip("rej", CHIP.rejected, rejections, "Rejected, waiting on Claude") : null,
+    active
+      ? held.length
+        ? chip("held", CHIP.held, held[0].id, `${active.id}: ${waitingLabel(held)}`)
+        : quiet
+          ? chip("quiet", CHIP.quiet, quietLabel(quiet).replace("No update in ", ""), `${active.id}: ${quietLabel(quiet)}`)
+          : chip("build", SPINNER, 1, `Building ${active.id}`)
+      : null,
+    spot ? chip("spot", CHIP.spot, spot, "In the spotlight") : null,
+    openQuestions().length ? chip("q", CHIP.question, openQuestions().length, "Open questions waiting on you") : null,
+    pendingSpecs().length ? chip("pend", CHIP.pending, pendingSpecs().length, "Pending approval") : null,
+    queuedSpecs().length ? chip("queued", CHIP.queued, queuedSpecs().length, "Up next: queued to build") : null,
+    builtSpecs().length ? chip("built", CHIP.built, builtSpecs().length, "Built") : null,
+    decisionCards().length ? chip("dec", CHIP.decision, decisionCards().length, "Decisions") : null,
+  ];
+  return h(
+    "div",
+    { class: "counts", onclick: () => panelCollapsed && togglePanel() },
+    h("div", { class: "chips" }, chips),
+    h("button", { class: "fold", title: panelCollapsed ? "Expand" : "Collapse", onclick: (e: Event) => (e.stopPropagation(), togglePanel()) }, svg(ICON.chev)),
   );
 }
 
@@ -470,7 +655,7 @@ function checkRow(c: Card): HTMLElement | null {
     "div",
     { class: `checks ${failed.length ? "fail" : "pass"}`, onclick: open, title: "Open the acceptance checks" },
     h("i", { class: "dot" }),
-    `${run.results.length - failed.length} of ${run.results.length} checks`,
+    h("span", { class: "count" }, `${run.results.length - failed.length} of ${run.results.length} checks`),
     failed.length ? h("span", { class: "failed" }, `${failed[0].name} failed`) : null,
     h("span", { class: "sp" }),
     failed.length ? fixButton(c, failed.map((r) => r.name)) : h("span", { class: "at" }, ago(run.at)),
@@ -663,7 +848,8 @@ function revertNote(c: Card): { reason: string; at: string } | null {
 
 // S-5: Revert in the side sheet for approved, active and done specs. Comment box text is the reason.
 function revertAction(c: Card, draft: () => string): HTMLElement | null {
-  if (c.kind !== "spec" || !["approved", "queued", "active", "done"].includes(c.status)) return null;
+  // S-33 / D-16: a done spec is updated, not reverted.
+  if (c.kind !== "spec" || !["approved", "queued", "active"].includes(c.status)) return null;
   const err = h("div", { class: "err" });
   const btn = h("button", { class: "btn" }, "Revert") as HTMLButtonElement;
   btn.title = "Take this spec back to discussing. Text in the comment box becomes the reason.";
@@ -725,6 +911,14 @@ function specFacts(c: Card): HTMLElement[] {
       ...(waits.length ? [row("Blocked", `by ${waits.map((w) => w.id).join(", ")}`)] : []),
     ];
   }
+  if (c.status === "replaced") {
+    const removed = filesOf(c).filter((f) => f.change === "removed").length;
+    const decided = branches(c).decisions.length;
+    return [
+      ...(removed ? [row("Removed", `${removed} file${removed === 1 ? "" : "s"}`)] : []),
+      ...(decided ? [row("Kept", `${decided} decision${decided === 1 ? "" : "s"}`)] : []),
+    ];
+  }
   if (["approved", "queued", "done"].includes(c.status)) {
     const decided = branches(c).decisions.length;
     return [
@@ -748,10 +942,14 @@ function specCard(c: Card): HTMLElement {
   const icon = ICON[(c.status === "queued" ? "approved" : c.status) as keyof typeof ICON] ?? ICON.draft;
   let status: HTMLElement;
   if (c.status === "approved" || c.status === "queued")
-    status = h("span", { class: "seal" }, svg(`<svg width="14" height="14" viewBox="0 0 14 14"><circle cx="7" cy="7" r="6.5" fill="#fff"/><path d="M4.3 7.2l1.8 1.8 3.6-3.8" fill="none" stroke="#16A34A" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`), c.status === "queued" ? "Queued to build" : "Approved");
+    status = h("span", { class: "seal" }, svg(`<svg width="14" height="14" viewBox="0 0 14 14"><circle cx="7" cy="7" r="6.5" fill="#fff"/><path d="M4.3 7.2l1.8 1.8 3.6-3.8" fill="none" stroke="#16A34A" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`), c.status === "queued" ? "Queued" : "Approved");
   else if (isNewDraft) status = h("span", { class: "pill", style: "background:var(--indigo-bg);color:var(--indigo-text)" }, h("i", { class: "dot", style: "background:var(--indigo)" }), "New");
+  else if (stalledOn(c).length) status = h("span", { class: "status held" }, waitingLabel(stalledOn(c)));
+  else if (updateOf(c)) status = h("span", { class: "status upd" }, "Update requested");
+  else if (quietFor(c)) status = h("span", { class: "status quiet" }, quietLabel(quietFor(c)));
   else if (c.status === "active")
     status = h("span", { class: "status building" }, "Claude building", h("span", { class: "dots" }, h("i", { style: phase(1200) }), h("i", { style: phase(1200) }), h("i", { style: phase(1200) })));
+  else if (c.status === "replaced") status = h("span", { class: "status replaced" }, linksOf(c, "replaced_by").length ? `Replaced by ${linksOf(c, "replaced_by")[0]}` : "Replaced");
   else if (c.status === "draft") status = h("span", { class: "status" }, firstEvent(c.id) ? `Draft by ${firstEvent(c.id)!.actor === "claude" ? "Claude" : "you"}` : "Draft");
   else
     status = h(
@@ -779,7 +977,7 @@ function specCard(c: Card): HTMLElement {
   return h(
     "div",
     {
-      class: `card spec s-${c.status}${c.status === "queued" ? " s-approved" : ""}${c.status === "approved" && certifying(c.id) ? " certify" : ""}${isNewDraft ? " is-new" : ""}${Date.now() - (entered.get(c.id) ?? 0) < 600 ? " entering" : ""}${spotClass(c)}`,
+      class: `card spec s-${c.status}${stalledOn(c).length ? " held" : quietFor(c) ? " quiet" : updateOf(c) ? " upd" : ""}${c.status === "queued" ? " s-approved" : ""}${c.status === "approved" && certifying(c.id) ? " certify" : ""}${isNewDraft ? " is-new" : ""}${Date.now() - (entered.get(c.id) ?? 0) < 600 ? " entering" : ""}${spotClass(c)}`,
       "data-id": c.id,
       // A redraw mid-sweep continues it rather than restarting.
       style: active ? phase(2400) : c.status === "approved" && certifying(c.id) ? `--cd:-${Date.now() - certified.get(c.id)!}ms` : undefined,
@@ -789,9 +987,10 @@ function specCard(c: Card): HTMLElement {
     h(
       "div",
       { class: "head" },
-      active ? svg(SPINNER.replace('width="12" height="12"', 'width="16" height="16"')) : svg(icon),
+      active && !stalledOn(c).length && !quietFor(c) ? svg(SPINNER.replace('width="12" height="12"', 'width="16" height="16"')) : svg(icon),
       h("span", { class: "id" }, c.id),
       sectionChip(c),
+      linksOf(c, "follows").length ? h("span", { class: "follows", onclick: (e: Event) => (e.stopPropagation(), panTo(linksOf(c, "follows")[0])) }, `Follows ${linksOf(c, "follows")[0]}`) : null,
       c.status === "discussing" && commentCount(c) ? h("span", { class: "ccount", title: "Comments" }, svg(MSG_ICON.replace('width="16" height="16"', 'width="12" height="12"')), String(commentCount(c))) : null,
       h("span", { class: "sp" }),
       status,
@@ -838,9 +1037,16 @@ function answerForm(c: Card, opts: { letter: string; text: string }[]): HTMLElem
     : opts.map((o) =>
     h("button", { class: `opt pick${d.pick === o.letter ? " on" : ""}`, onclick: () => set({ pick: d.pick === o.letter ? undefined : o.letter, text: "", error: undefined }) }, h("span", { class: "l" }, o.letter), h("span", {}, o.text)),
   );
-  const input = h("input", { placeholder: opts.length ? "Other: type your own answer" : "Type your answer" }) as HTMLInputElement;
+  // A free answer can run to several lines: the box grows with it; Enter sends, Shift+Enter breaks the line.
+  const input = h("textarea", { rows: 1, placeholder: opts.length ? "Other: type your own answer" : "Type your answer" }) as HTMLTextAreaElement;
   input.value = d.text;
+  const grow = () => {
+    input.style.height = "auto";
+    input.style.height = `${input.scrollHeight + 2}px`;
+  };
+  requestAnimationFrame(grow);
   input.oninput = () => {
+    grow();
     if (multi) {
       const toggled = !d.text.trim() !== !input.value.trim();
       d.text = input.value;
@@ -854,9 +1060,14 @@ function answerForm(c: Card, opts: { letter: string; text: string }[]): HTMLElem
     else answerDrafts.set(c.id, { ...d, focused: true });
   };
   input.onfocus = () => answerDrafts.set(c.id, { ...d, focused: true });
-  input.onblur = () => answerDrafts.has(c.id) && (answerDrafts.get(c.id)!.focused = false);
+  // A redraw removes the focused box, which fires blur too; only a real blur (the box still on the
+  // page) gives up the focus, or a second quick redraw would drop it.
+  input.onblur = () => setTimeout(() => input.isConnected && answerDrafts.has(c.id) && (answerDrafts.get(c.id)!.focused = false), 0);
   input.onkeydown = (ev) => {
-    if (ev.key === "Enter") send(input.value, multi ? picks : undefined);
+    if (ev.key === "Enter" && !ev.shiftKey) {
+      ev.preventDefault();
+      send(input.value, multi ? picks : undefined);
+    }
     if (ev.key === "Escape") {
       answerDrafts.delete(c.id);
       render();
@@ -910,15 +1121,15 @@ function answeredView(c: Card, opts: { letter: string; text: string }[], answer:
   return h("div", { class: "options" }, h("div", { class: "opt chosen" }, h("span", { class: "l" }, "Answer"), h("span", {}, answer)));
 }
 
-// S-26: a redirect waits until Claude rewrites the question (an update event after it).
+// S-26: a redirect waits until Claude acts on it: an update rewrites the question; recording or dropping closes it.
 function redirectNote(c: Card): string | null {
   if (c.kind !== "question" || c.status !== "open") return null;
   const evs = data.events.filter((e) => e.card === c.id && (e.action === "redirect" || e.action === "update"));
   const last = evs[evs.length - 1];
   return last?.action === "redirect" ? (last.detail ?? "") : null;
 }
-function redirectBox(text: string): HTMLElement {
-  return h("div", { class: "redirect" }, h("div", { class: "k" }, "Redirected"), h("div", { class: "t" }, text), h("div", { class: "w" }, h("span", { class: "dots" }, h("i", { style: phase(1200) }), h("i", { style: phase(1200) }), h("i", { style: phase(1200) })), "Claude is rewriting the question"));
+function redirectBox(text: string, label = "Your answer"): HTMLElement {
+  return h("div", { class: "redirect" }, h("div", { class: "k" }, label), h("div", { class: "t" }, text), h("div", { class: "w" }, h("span", { class: "dots" }, h("i", { style: phase(1200) }), h("i", { style: phase(1200) }), h("i", { style: phase(1200) })), "Waiting on Claude"));
 }
 
 function questionCard(c: Card): HTMLElement {
@@ -938,7 +1149,7 @@ function questionCard(c: Card): HTMLElement {
       { class: "head" },
       svg(open ? ICON.question : ICON.questionDone),
       h("span", { class: "id" }, c.id),
-      c.design ? h("span", { class: "kindpill design" }, "Design") : open ? h("span", { class: "kindpill" }, opts.length ? `Pick ${c.select === "multi" ? "any" : "one"} of ${opts.length}` : "Yes or no") : null,
+      c.design ? h("span", { class: "kindpill design" }, "Design") : linksOf(c, "replaces").length ? h("span", { class: "kindpill replace" }, "Replacement") : open ? h("span", { class: "kindpill" }, opts.length ? `Pick ${c.select === "multi" ? "any" : "one"} of ${opts.length}` : "Yes or no") : null,
       h("span", { class: "sp" }),
       h("span", { class: "status" }, statusText),
     ),
@@ -993,7 +1204,8 @@ function groupTitle(n: Node): HTMLElement {
 function nodeEl(n: Node): HTMLElement {
   return h(
     "div",
-    { class: `node depth${n.depth}` },
+    // A parent with many children gets a wider gutter, so each child's line keeps an 8px lane.
+    { class: `node depth${n.depth}`, style: n.children.length > 5 ? `gap:${32 + 8 * (n.children.length - 1)}px` : undefined },
     cardFor(n.card),
     n.children.length ? h("div", { class: "children" }, groupTitle(n), n.children.map(nodeEl)) : null,
   );
@@ -1006,12 +1218,34 @@ const collapsed: Set<string> = (() => {
     return new Set();
   }
 })();
-function toggleSection(key: string) {
-  collapsed.has(key) ? collapsed.delete(key) : collapsed.add(key);
+function saveCollapsed() {
   try {
     localStorage.setItem("spill.collapsed", JSON.stringify([...collapsed]));
   } catch {}
+}
+function toggleSection(key: string) {
+  collapsed.has(key) ? collapsed.delete(key) : collapsed.add(key);
+  saveCollapsed();
   render();
+}
+// New specs and spotlit cards open their section once; the user can collapse it again after.
+const toReveal = new Set<string>();
+let spotRevealed = "";
+function openSections() {
+  const f = data.focus;
+  const spot = [...data.cards.flatMap((c) => stalledOn(c)).map((q) => q.id), ...(f?.discussing ?? []), ...(f?.next ?? [])];
+  const key = `${f?.at ?? ""} ${spot.join(",")}`;
+  if (key !== spotRevealed) {
+    spotRevealed = key;
+    spot.forEach((id) => toReveal.add(id));
+  }
+  let changed = false;
+  for (const id of toReveal) {
+    const sec = sectionOf.get(id);
+    if (sec && collapsed.delete(sec)) changed = true;
+  }
+  toReveal.clear();
+  if (changed) saveCollapsed();
 }
 
 function subtree(n: Node): Card[] {
@@ -1064,18 +1298,23 @@ function drawLines(content: HTMLElement) {
     const x1 = pr.right - box.left;
     const y1 = pr.top - box.top + 26;
     const pc = byId.get(parentCard.dataset.id!)!;
+    // Each child gets its own lane across the gutter, nested so no lines cross: the nearest child
+    // turns down closest to the cards, the farthest closest to the parent.
+    const n = kids.length;
     kids.forEach((k, i) => {
       const kr = k.getBoundingClientRect();
       const x2 = kr.left - box.left;
       const y2 = kr.top - box.top + 20;
       const c = byId.get(k.dataset.id!)!;
-      const mx = x1 + 24 + Math.min(i, 6) * 6;
+      const span = x2 - x1 - 32;
+      const step = n > 1 ? Math.min(8, span / (n - 1)) : 0;
+      const mx = x1 + 16 + (n - 1 - i) * step;
       const r = 10;
       const d =
         Math.abs(y2 - y1) < 28
           ? `M${x1} ${y1} C${x1 + 28} ${y1} ${x1 + 28} ${y2} ${x2} ${y2}`
           : `M${x1} ${y1} H${mx - r} Q${mx} ${y1} ${mx} ${y1 + r} V${y2 - r} Q${mx} ${y2} ${mx + r} ${y2} H${x2}`;
-      paths.push(`<path d="${d}" stroke="${color(c)}"${c.status === "active" ? ' class="flow"' : ""}/>`);
+      paths.push(`<path d="${d}" stroke="${color(c)}"${c.status === "active" && !stalledOn(c).length && !quietFor(c) ? ' class="flow"' : ""}/>`);
     });
     paths.push(`<circle cx="${x1}" cy="${y1}" r="3" fill="#fff" stroke="${dotColor(pc)}"/>`);
   }
@@ -1092,7 +1331,7 @@ function drawLines(content: HTMLElement) {
       const y = kr.top - box.top + 26;
       const x2 = kr.left - box.left;
       const c = byId.get(k.dataset.id!)!;
-      paths.push(`<path d="M${x} ${y0} V${y - 10} Q${x} ${y} ${x + 10} ${y} H${x2}" stroke="${color(c)}"${c.status === "active" ? ' class="flow"' : ""}/>`);
+      paths.push(`<path d="M${x} ${y0} V${y - 10} Q${x} ${y} ${x + 10} ${y} H${x2}" stroke="${color(c)}"${c.status === "active" && !stalledOn(c).length && !quietFor(c) ? ' class="flow"' : ""}/>`);
       any = true;
     }
     if (any) paths.push(`<circle cx="${x}" cy="${y0}" r="3" fill="#fff" stroke="#A1A1AA"/>`);
@@ -1104,9 +1343,91 @@ function drawLines(content: HTMLElement) {
 // ---------- side sheet (S-22) ----------
 
 let openId: string | null = decodeURIComponent(location.hash.slice(1)) || null;
-let sheetTab: "overview" | "links" | "activity" | "file" = "overview";
+let sheetTab: "overview" | "links" | "activity" | "file" | "code" = "overview";
 let sheetFile: { id: string; text: string } | null = null;
+// S-34: which version the Overview compares the spec with (an index into its versions, or -1 for none).
+const compareSel = new Map<string, number>();
+const versionsOf = (c: Card) => data.versions?.[c.id] ?? [];
+function changedSinceApproved(c: Card): boolean {
+  const v = versionsOf(c).find((x) => x.approved);
+  return c.kind === "spec" && ["draft", "discussing"].includes(c.status) && !!v && v.body.trim() !== c.body.trim();
+}
+function compareIndex(c: Card): number {
+  const vs = versionsOf(c);
+  const sel = compareSel.get(c.id);
+  if (sel !== undefined && sel < vs.length) return sel;
+  return changedSinceApproved(c) ? vs.findIndex((x) => x.approved) : -1;
+}
+function versionLabel(vs: (Version & { approved: boolean })[], i: number): string {
+  const v = vs[i];
+  const who = v.actor === "user" ? "you" : v.actor === "auto" ? "Spill" : "Claude";
+  const what = i === vs.length - 1 ? "Current" : v.approved ? "Approved version" : i === 0 ? "First draft" : "Edited";
+  return `v${i + 1} ${what}, ${who}, ${ago(v.at)}`;
+}
+function compareBar(c: Card): HTMLElement | null {
+  const vs = versionsOf(c);
+  if (vs.length < 2) return null;
+  const ci = compareIndex(c);
+  const sel = h(
+    "select",
+    { onchange: (e: Event) => (compareSel.set(c.id, Number((e.target as HTMLSelectElement).value)), render()) },
+    h("option", { value: "-1" }, "Nothing, show the spec"),
+    vs.slice(0, -1).map((_, i) => h("option", { value: String(i), selected: i === ci ? "" : undefined }, versionLabel(vs, i))),
+  ) as HTMLSelectElement;
+  sel.value = String(ci);
+  const d = ci >= 0 ? lineDiff(vs[ci].body, c.body) : [];
+  const add = d.filter((l) => l.op === "add").length;
+  const del = d.filter((l) => l.op === "del").length;
+  return h("div", { class: "compare" }, h("span", {}, "Compared with"), sel, h("span", { class: "sp" }), ci >= 0 ? h("span", { class: "plus" }, `+${add}`) : null, ci >= 0 ? h("span", { class: "minus" }, `-${del}`) : null);
+}
+// The diff of the picked version against the current text. Unchanged runs fold into one grey line
+// naming their sections; the heading right before a change stays, so each change has its place.
+function diffView(c: Card): HTMLElement {
+  const vs = versionsOf(c);
+  const lines = lineDiff(vs[compareIndex(c)].body, c.body).filter((l) => l.text.trim());
+  const out: HTMLElement[] = [];
+  const heading = (t: string) => /^#{1,6}\s/.test(t);
+  const fold = (run: string[]) => {
+    if (!run.length) return;
+    const names = run.filter(heading).map((t) => t.replace(/^#+\s*/, ""));
+    out.push(h("div", { class: "fold" }, names.length ? `${names.join(", ")} unchanged` : `${run.length} unchanged line${run.length === 1 ? "" : "s"}`));
+  };
+  let run: string[] = [];
+  const flush = (beforeChange: boolean) => {
+    const hi = beforeChange ? run.findLastIndex(heading) : -1;
+    if (hi < 0) {
+      if (run.length <= 2 && beforeChange) run.forEach((t) => out.push(h("div", { class: "dl same" }, h("span", { class: "op" }, ""), h("span", {}, t))));
+      else fold(run);
+    } else {
+      fold(run.slice(0, hi));
+      out.push(h("div", { class: "dh" }, run[hi].replace(/^#+\s*/, "")));
+      const after = run.slice(hi + 1);
+      if (after.length <= 2) after.forEach((t) => out.push(h("div", { class: "dl same" }, h("span", { class: "op" }, ""), h("span", {}, t))));
+      else fold(after);
+    }
+    run = [];
+  };
+  for (const l of lines) {
+    if (l.op === "same") {
+      run.push(l.text);
+      continue;
+    }
+    if (run.length) flush(true);
+    out.push(h("div", { class: `dl ${l.op}` }, h("span", { class: "op" }, l.op === "add" ? "+" : "-"), h("span", {}, l.text)));
+  }
+  flush(false);
+  return h("div", { class: "diff" }, out);
+}
+
 let commentDraft = "";
+let commentFocused = false;
+let commentError = "";
+
+// A spec being built opens on its activity, the live record of the build.
+function defaultTab(id: string): typeof sheetTab {
+  const c = data.cards.find((x) => x.id === id);
+  return c?.kind === "spec" && c.status === "active" ? "activity" : "overview";
+}
 
 let sheetScrollTo: string | null = null;
 function openSheet(id: string, pan = false, scrollTo: string | null = null) {
@@ -1114,9 +1435,10 @@ function openSheet(id: string, pan = false, scrollTo: string | null = null) {
   markSeen(id);
   if (scrollTo) sheetTab = "overview";
   if (openId !== id) {
-    sheetTab = "overview";
+    sheetTab = scrollTo ? "overview" : defaultTab(id);
     sheetFile = null;
     commentDraft = "";
+    commentError = "";
   }
   openId = id;
   history.replaceState(null, "", `#${id}`);
@@ -1179,9 +1501,13 @@ function markdown(src: string): HTMLElement {
   return el;
 }
 
-const LINK_LABEL: Record<string, string> = { blocked_by: "Blocked by", blocks: "Blocks", depends_on: "Depends on", answers: "Answers", answered_by: "Answered by" };
+const LINK_LABEL: Record<string, string> = { blocked_by: "Blocked by", blocks: "Blocks", depends_on: "Depends on", answers: "Answers", answered_by: "Answered by", follows: "Follows", followed_by: "Followed by", replaces: "Replaces", replaced_by: "Replaced by" };
+
+// S-33: an update the user asked for on a done spec, until Claude acts on it.
+const updateOf = (c: Card) => (c.kind === "spec" && c.status === "done" ? pendingUpdate(c, data.cards, data.events) : null);
 
 function statusPill(c: Card): HTMLElement {
+  if (updateOf(c)) return h("span", { class: "spill-pill st-upd" }, "Update requested");
   const label = c.kind === "spec" ? (SPEC_STATUS_LABEL[c.status] ?? c.status) : c.status[0].toUpperCase() + c.status.slice(1);
   return h("span", { class: `spill-pill st-${c.status}` }, label);
 }
@@ -1205,21 +1531,62 @@ function sheetLinks(c: Card): HTMLElement {
   );
 }
 
+// Activity reads like a log: oldest at the top, newest at the bottom, where the sheet stays scrolled.
+// Entries that arrive while it is open slide in, and a spec being built ends in a live row.
+const seenEvents = new Map<string, Set<string>>();
 function sheetActivity(c: Card): HTMLElement {
-  const evs = data.events.filter((e) => e.card === c.id && e.action !== "focus").reverse();
-  if (!evs.length) return h("div", { class: "empty-tab" }, "No activity yet.");
-  const verb: Record<string, string> = { comment: "commented", status: "moved it", update: "updated", link: "linked", record: "recorded", draft_spec: "drafted it", ask: "asked", create: "created it" };
+  const evs = data.events.filter((e) => e.card === c.id && e.action !== "focus");
+  const held = stalledOn(c);
+  const building = c.kind === "spec" && c.status === "active";
+  if (!evs.length && !building) return h("div", { class: "empty-tab" }, "No activity yet.");
+  const verb: Record<string, string> = { comment: "commented", status: "moved it", update: "updated", link: "linked", unlink: "unlinked", record: "recorded", draft_spec: "drafted it", ask: "asked", create: "created it", checks: "ran checks", redirect: "answered", update_request: "asked for an update" };
+  const key = (e: SpillEvent) => `${e.at} ${e.action}`;
+  const seen = seenEvents.get(c.id);
+  seenEvents.set(c.id, new Set(evs.map(key)));
+  // "queued -> active: note" or "draft -> approved (auto: reason)": the two statuses as pills, and
+  // anything after the new status as its own line under them.
+  const status = (d: string) => {
+    const m = /^(\S+) -> (\S+?)(?::\s*|\s+|$)([\s\S]*)$/.exec(d);
+    if (!m) return h("div", { class: "d" }, d);
+    const note = m[3].trim().replace(/^\((.*)\)$/s, "$1");
+    return h(
+      "div",
+      { class: "d" },
+      h("div", { class: "move" }, h("span", { class: "st" }, m[1]), h("span", { class: "arr" }, "\u2192"), h("span", { class: "st to" }, m[2])),
+      note ? h("div", { class: "note" }, note) : null,
+    );
+  };
   return h(
     "div",
     { class: "activity" },
     evs.map((e) =>
       h(
         "div",
-        { class: "ev" },
-        h("span", { class: `who ${e.actor}` }, e.actor === "user" ? "You" : "Claude"),
-        h("div", { class: "body" }, h("div", { class: "line" }, h("b", {}, verb[e.action] ?? e.action), h("span", { class: "a" }, ago(e.at))), e.detail ? h("div", { class: "d" }, e.detail) : null),
+        { class: `ev ${e.actor}${seen && !seen.has(key(e)) ? " fresh" : ""}` },
+        h("span", { class: `who ${e.actor}` }, e.actor === "user" ? "You" : e.actor === "auto" ? "Auto" : "Claude"),
+        h("div", { class: "body" }, h("div", { class: "line" }, h("b", {}, verb[e.action] ?? e.action), h("span", { class: "a" }, ago(e.at))), e.detail ? (e.action === "status" ? status(e.detail) : h("div", { class: "d" }, e.detail)) : null),
       ),
     ),
+    building
+      ? quietFor(c)
+        ? h("div", { class: "ev live quiet" }, h("span", { class: "who claude" }, "Claude"), h("div", { class: "body" }, h("div", { class: "line" }, h("b", {}, quietLabel(quietFor(c))), h("span", { class: "a" }, "its session may have stopped"))))
+        : held.length
+        ? h("div", { class: "ev live held" }, h("span", { class: "who claude" }, "Claude"), h("div", { class: "body" }, h("div", { class: "line" }, h("b", {}, waitingLabel(held)), h("span", { class: "a" }, "your answer lets the build go on"))))
+        : h("div", { class: "ev live" }, h("span", { class: "who claude" }, "Claude"), h("div", { class: "body" }, h("div", { class: "line" }, h("b", {}, "building"), h("span", { class: "dots" }, h("i", { style: phase(1200) }), h("i", { style: phase(1200) }), h("i", { style: phase(1200) })))))
+      : null,
+  );
+}
+
+// S-35 / D-20: the files Claude touched building the spec, named "Code" beside the card's own File tab.
+const filesOf = (c: Card) => data.files?.[c.id] ?? [];
+function sheetCode(c: Card): HTMLElement {
+  const files = filesOf(c);
+  if (!files.length) return h("div", { class: "empty-tab" }, "No files recorded.");
+  return h(
+    "div",
+    { class: "codefiles" },
+    h("div", { class: "note" }, c.status === "replaced" ? "Recorded by Claude while building, and removed when this spec was replaced." : "Recorded by Claude while building. Replacing this spec removes these."),
+    files.map((f) => h("div", { class: `frow ${f.change}` }, h("span", { class: "p" }, f.path), h("span", { class: "c" }, f.change))),
   );
 }
 
@@ -1241,37 +1608,76 @@ function sheet(): HTMLElement | null {
   const col = columnOf(c.id);
   const pos = col.indexOf(c.id);
   const evs = data.events.filter((e) => e.card === c.id && e.action !== "focus");
-  const tabs: [typeof sheetTab, string, number | null][] = [["overview", "Overview", null], ["links", "Links", c.links.length], ["activity", "Activity", evs.length], ["file", "File", null]];
+  const overviewTab: [typeof sheetTab, string, number | null] = ["overview", "Overview", null];
+  const activityTab: [typeof sheetTab, string, number | null] = ["activity", "Activity", evs.length];
+  const building = c.kind === "spec" && c.status === "active";
+  const tabs: [typeof sheetTab, string, number | null][] = [...(building ? [activityTab, overviewTab] : [overviewTab, activityTab]), ["links", "Links", c.links.length], ...(filesOf(c).length ? [["code", "Code", filesOf(c).length] as [typeof sheetTab, string, number | null]] : []), ["file", "File", null]];
   const p = c.kind === "spec" ? progress(c) : null;
   const body =
     sheetTab === "links" ? sheetLinks(c)
     : sheetTab === "activity" ? sheetActivity(c)
     : sheetTab === "file" ? sheetFileTab(c)
+    : sheetTab === "code" ? sheetCode(c)
     : h(
         "div",
         { class: "overview" },
+        updateOf(c) ? redirectBox(updateOf(c)!.texts.join("\n\n"), "Your update") : null,
         p && p.total && ["active", "done"].includes(c.status) ? h("div", { class: "built" }, `${p.done} of ${p.total} built`) : null,
         // S-12 req 3: what a decision changed.
         c.kind === "decision" && changedBy(c).length
           ? h("div", { class: "changed" }, "Changed: ", changedBy(c).flatMap((id, i) => [i ? ", " : "", h("button", { class: "qid", onclick: () => openSheet(id, true) }, id)]))
           : null,
-        markdown(c.body),
+        compareBar(c),
+        compareIndex(c) >= 0 ? diffView(c) : markdown(c.body),
         checksBox(c),
         c.kind === "question" && c.status === "open" ? (redirectNote(c) !== null ? redirectBox(redirectNote(c)!) : answerForm(c, options(c))) : null,
       );
   // An open question's options are the answer buttons below, not a second list.
   if (c.kind === "question" && c.status === "open" && options(c).length && sheetTab === "overview") body.querySelectorAll(".md ul").forEach((u) => u.remove());
 
-  const input = h("input", { placeholder: `Comment to Claude about ${c.id}` }) as HTMLInputElement;
+  // A comment can run to several lines: the box grows with it; Enter sends, Shift+Enter breaks the
+  // line. Live redraws keep the draft, the focus and the caret.
+  // S-33: on a done spec the box asks for an update; while one is open it adds to it.
+  const updating = c.kind === "spec" && c.status === "done";
+  const pendingUpd = updateOf(c);
+  const input = h("textarea", { rows: 1, placeholder: updating ? (pendingUpd ? "Add to the update" : `How should ${c.id} be updated?`) : `Comment to Claude about ${c.id}` }) as HTMLTextAreaElement;
   input.value = commentDraft;
-  input.oninput = () => (commentDraft = input.value);
-  const send = async () => {
-    if (!input.value.trim()) return;
-    const e = await post(`/api/cards/${c.id}/comment`, { text: input.value });
-    if (!e) commentDraft = "";
+  const grow = () => {
+    input.style.height = "auto";
+    input.style.height = `${input.scrollHeight + 2}px`;
   };
+  requestAnimationFrame(grow);
+  input.oninput = () => {
+    commentDraft = input.value;
+    grow();
+  };
+  input.onfocus = () => (commentFocused = true);
+  input.onblur = () => setTimeout(() => input.isConnected && (commentFocused = false), 0);
+  if (commentFocused)
+    setTimeout(() => {
+      input.focus();
+      input.setSelectionRange(input.value.length, input.value.length);
+    }, 0);
+  const send = async () => {
+    const text = input.value;
+    if (!text.trim()) return;
+    commentDraft = "";
+    commentError = "";
+    input.value = "";
+    grow();
+    const e = await post(`/api/cards/${c.id}/${updating ? "update" : "comment"}`, { text });
+    if (e) {
+      commentDraft = text;
+      commentError = e;
+      render();
+    }
+  };
+  const updateBtn = updating ? (h("button", { class: "btn primary", onclick: send }, pendingUpd ? "Send" : "Update") as HTMLButtonElement) : null;
   input.onkeydown = (e) => {
-    if (e.key === "Enter") send();
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      send();
+    }
     if (e.key === "Escape") input.blur();
   };
   const acts = c.kind === "spec" ? [specActions(c, () => input.value), revertAction(c, () => input.value)].filter((x): x is HTMLElement => !!x) : [];
@@ -1295,7 +1701,7 @@ function sheet(): HTMLElement | null {
         h("button", { class: "kb", title: "Close (Esc)", onclick: closeSheet }, "Esc"),
       ),
       h("h2", {}, c.title),
-      h("div", { class: "prov" }, statusPill(c), h("span", {}, provenance(c) ?? "")),
+      h("div", { class: "prov" }, statusPill(c), changedSinceApproved(c) ? h("span", { class: "spill-pill st-changed" }, "Changed since approved") : null, h("span", {}, provenance(c) ?? "")),
       h(
         "div",
         { class: "tabs" },
@@ -1303,7 +1709,7 @@ function sheet(): HTMLElement | null {
       ),
     ),
     h("div", { class: "sheet-body" }, body),
-    h("div", { class: "sheet-foot" }, h("div", { class: "reason comment" }, input), actions),
+    h("div", { class: "sheet-foot" }, h("div", { class: `reason comment${updateBtn ? " upd" : ""}` }, input, updateBtn), commentError ? h("div", { class: "err" }, commentError) : null, actions),
   );
 }
 
@@ -1875,6 +2281,7 @@ function trackNewSpecs() {
   for (const id of fresh) {
     knownSpecs.add(id);
     entered.set(id, Date.now());
+    toReveal.add(id);
   }
   const now = Date.now();
   // req 5: specs within 3 seconds of the first share one notice.
@@ -1940,6 +2347,7 @@ function render() {
   if (loose.length) groups.push({ key: "none", title: "No section", color: "#A1A1AA", roots: loose });
   sectionOf.clear();
   for (const g of groups) for (const c of g.roots.flatMap(subtree)) sectionOf.set(c.id, g.key);
+  openSections();
 
   // Column 1 sits one indent (48px) right of the section headers.
   const content = h(
@@ -1952,11 +2360,11 @@ function render() {
 
   const spot = spotlightPanel();
   const rejected = rejectionsPanel();
-  const canvas = h("div", { id: "canvas", class: data.focus && !spotHidden ? "spotlit" : "" }, content);
+  const canvas = h("div", { id: "canvas", class: data.focus || data.cards.some((c) => stalledOn(c).length) ? "spotlit" : "" }, content);
   enablePan(canvas);
   canvas.addEventListener("click", (e) => {
     const t = e.target as HTMLElement;
-    if (t.closest("button, input, a, .waits, .pill, .checks.run, .checks.pass, .checks.fail")) return;
+    if (t.closest("button, input, textarea, a, .waits, .pill, .checks.run, .checks.pass, .checks.fail")) return;
     const card = t.closest<HTMLElement>(".card[data-id]");
     if (card) openSheet(card.dataset.id!);
     // S-22 req 9: a click on empty canvas closes the sheet; the end of a drag-pan does not.
@@ -1966,39 +2374,21 @@ function render() {
   document.body.classList.toggle("sheet-open", !!openId);
   if (openId) content.querySelector(`[data-id="${openId}"]`)?.classList.add("selected");
   const prevBody = document.querySelector(".sheet-body");
-  const sheetScroll = prevBody && prevBody.closest(".sheet")?.getAttribute("data-for") === `${openId}:${sheetTab}` ? prevBody.scrollTop : 0;
+  const sameSheet = !!prevBody && prevBody.closest(".sheet")?.getAttribute("data-for") === `${openId}:${sheetTab}`;
+  let sheetScroll = sameSheet ? prevBody!.scrollTop : 0;
+  // Activity sticks to its newest entry unless the user has scrolled up to read.
+  if (sheetTab === "activity" && (!sameSheet || prevBody!.scrollHeight - prevBody!.scrollTop - prevBody!.clientHeight < 40)) sheetScroll = Infinity;
   const side = sheet();
   side?.setAttribute("data-for", `${openId}:${sheetTab}`);
+  // The slide-in plays when a sheet opens, not on every live update while it stays open.
+  if (side && prevBody?.closest(".sheet")?.getAttribute("data-for")?.startsWith(`${openId}:`)) side.classList.add("stay");
 
   const open = data.cards.filter(needsYou).length;
   const topbar = toolbar(open);
 
-  const decisions = data.cards.filter((c) => c.kind === "decision").sort((a, b) => num(b.id) - num(a.id));
-  const pending = pendingGroup();
-  const strip =
-    rejected || spot || pending || decisions.length
-      ? h("div", { class: "strip" }, rejected, spot, pending, decisions.length ? h(
-        "div",
-        { class: "group" },
-        // S-12 req 4: All opens the decisions log (S-7).
-        h("div", { class: "hd" }, h("b", {}, "Recent decisions"), h("button", { class: "link", onclick: () => openSearch(null, "D-") }, `All ${decisions.length}`)),
-        decisions.slice(0, 3).map((d) => {
-          const e = firstEvent(d.id);
-          return h(
-            "div",
-            {
-              class: "item",
-              onmouseenter: () => focus([d.id, ...changedBy(d)]),
-              onmouseleave: unfocus,
-              onclick: () => openSheet(d.id, true),
-            },
-            h("span", { class: "id" }, d.id),
-            h("span", { class: "t" }, d.title),
-            e ? h("span", { class: "a" }, ago(e.at).replace(" ago", "")) : null,
-          );
-        }),
-      ) : null)
-      : null;
+  // S-31 req 1: every group with something in it, in a fixed order, under the counts row.
+  const panelGroups = [rejected, spot, pendingGroup(), upNextGroup(), lastBuiltGroup(), decisionsGroup()].filter(Boolean);
+  const strip = panelGroups.length ? h("div", { class: `strip${panelCollapsed ? " collapsed" : ""}` }, countsRow(), ...(panelCollapsed ? [] : panelGroups)) : null;
 
   const chrome = h("div", { class: "chrome", "data-tauri-drag-region": "" }, h("div", { class: "bar-wrap" }, searchOpen ? searchDrop() : topbar, menuOpen ? projectMenu() : searchOpen ? null : messageDrop()));
   updateFab();
@@ -2008,22 +2398,20 @@ function render() {
     canvas.scrollTop = scroll.top;
   }
   requestAnimationFrame(() => drawLines(content));
-  if (side) side.querySelector(".sheet-body")!.scrollTop = sheetScroll;
+  if (side) side.querySelector(".sheet-body")!.scrollTop = sheetScroll === Infinity ? 1e9 : sheetScroll;
   if (side && sheetScrollTo === "checks") {
     sheetScrollTo = null;
     const target = [...side.querySelectorAll(".md h4")].find((x) => /acceptance checks/i.test(x.textContent ?? "")) ?? side.querySelector(".checkbox");
     target?.scrollIntoView({ block: "start" });
   }
 
-  // A new focus shows the spotlight again and pans to its first card, once.
+  // When the spotlight moves (Claude sets a new focus, a card leaves it as done or answered, or a
+  // question starts holding the active spec), show it again and pan to its first card, once.
   const f = data.focus;
-  if (f && f.at !== spotSeen) {
-    spotSeen = f.at;
-    if (spotHidden) {
-      spotHidden = false;
-      return render();
-    }
-    const first = f.discussing[0] ?? f.next[0];
+  const held = data.cards.flatMap((c) => stalledOn(c))[0]?.id;
+  const first = held ?? f?.discussing[0] ?? f?.next[0];
+  if (first && `${f?.at ?? ""} ${first}` !== spotSeen) {
+    spotSeen = `${f?.at ?? ""} ${first}`;
     // Instant, so a render right after (the live connection opening) keeps the position.
     requestAnimationFrame(() => panTo(first, false));
   }
@@ -2034,7 +2422,7 @@ let pan: { el: HTMLElement; x: number; y: number; l: number; t: number } | null 
 let panMoved = false;
 function enablePan(canvas: HTMLElement) {
   canvas.addEventListener("mousedown", (e) => {
-    if ((e.target as HTMLElement).closest(".card, .sechead, button, input")) return;
+    if ((e.target as HTMLElement).closest(".card, .sechead, button, input, textarea")) return;
     pan = { el: canvas, x: e.clientX, y: e.clientY, l: canvas.scrollLeft, t: canvas.scrollTop };
     panMoved = false;
     canvas.classList.add("panning");
@@ -2064,9 +2452,33 @@ window.addEventListener("mouseup", () => {
   }
 });
 
+// The spotlight Claude set can go stale: an answered question or a finished spec leaves it on its
+// own, and with nothing left the spotlight goes away.
+function pruneFocus() {
+  const f = data.focus;
+  if (!f) return;
+  const live = (id: string) => {
+    const c = data.cards.find((x) => x.id === id);
+    if (!c) return false;
+    if (c.kind === "question") return c.status === "open";
+    if (c.kind === "spec") return !["done", "rejected", "replaced"].includes(c.status);
+    return true;
+  };
+  const discussing = f.discussing.filter(live);
+  // A card being built or discussed has moved past "next"; the one after it is next.
+  const next = f.next.filter((id) => live(id) && !discussing.includes(id) && data.cards.find((x) => x.id === id)?.status !== "active");
+  // The note describes the spotlight as Claude set it, so it goes once any card has left.
+  const pruned = discussing.length < f.discussing.length || f.next.some((id) => !live(id));
+  data.focus = discussing.length || next.length ? { ...f, discussing, next, note: pruned ? "" : f.note } : null;
+}
+
 async function load() {
   const r = await fetch("/api/board");
+  const first = !data.cards.length;
   data = await r.json();
+  pruneFocus();
+  // A sheet opened from the URL picks its tab once the board is known.
+  if (first && openId) sheetTab = defaultTab(openId);
   if (mouseDown) renderPending = true;
   else render();
 }

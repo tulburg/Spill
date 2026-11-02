@@ -1,6 +1,8 @@
 #!/usr/bin/env bun
 import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { createConnection } from "node:net";
+import { homedir } from "node:os";
+import { dirname, join } from "node:path";
 import { Board } from "./board";
 import { serve } from "./mcp";
 import { startServer } from "./server";
@@ -21,24 +23,36 @@ const USAGE = `spill: the spec board, from the terminal
   spill log [n]                   last n events (default 20)
   spill focus                     what Claude is discussing now and next
   spill message text [--file p]   message Claude, not about any card, optionally with files
-  spill app                       open the board in the Spill window
+  spill app [port]                open the board in a Spill window (adds a window if Spill is open)
   spill serve [port]              serve the board for a browser (default 4747)
   spill mcp                       run the MCP server on stdio (for Claude)`;
 
 const TAURI_DIR = join(import.meta.dir, "..", "src-tauri");
 
-// Serve the board, then (for `spill app`) open the Tauri window on it. Closing the window stops the server.
-async function openApp(store: Store, window: boolean, port: number): Promise<void> {
+// Serve the board for a browser.
+async function serveBoard(store: Store, port: number): Promise<void> {
   const server = await startServer(store, port);
-  const url = `http://localhost:${server.port}`;
-  console.log(`Spill board for ${store.config().project || store.dir} at ${url}`);
-  if (!window) return;
+  console.log(`Spill board for ${store.config().project || store.dir} at http://localhost:${server.port}`);
+}
+
+// S-36 (D-22): one Spill app holds every project window and serves each board itself. Hand this
+// project to the running app, or start the app with it; the app picks a free port unless one is given.
+async function openApp(store: Store, port?: number): Promise<void> {
+  const root = dirname(store.dir);
+  const name = store.config().project || root;
+  const handed = await new Promise<boolean>((done) => {
+    const s = createConnection(join(homedir(), ".spill", "app.sock"));
+    s.on("connect", () => s.write(`open\t${root}\t${port ?? ""}\n`));
+    s.on("data", () => (s.end(), done(true)));
+    s.on("error", () => done(false));
+  });
+  if (handed) return console.log(`Opened ${name} in the running Spill app`);
   const built = join(TAURI_DIR, "target", "debug", "spill-app");
   const cmd = existsSync(built) ? [built] : ["cargo", "run", "--quiet", "--manifest-path", join(TAURI_DIR, "Cargo.toml")];
-  const child = Bun.spawn(cmd, { env: { ...process.env, SPILL_URL: url }, stdout: "inherit", stderr: "inherit" });
-  await child.exited;
-  server.stop(true);
-  process.exit(0);
+  const env = { ...process.env, SPILL_OPEN: root, SPILL_BUN: process.execPath, SPILL_CLI: join(import.meta.dir, "cli.ts"), ...(port ? { SPILL_PORT: String(port) } : {}) };
+  console.log(`Opening ${name} in Spill`);
+  const child = Bun.spawn(cmd, { env, stdout: "inherit", stderr: "inherit" });
+  process.exit(await child.exited);
 }
 
 function main(argv: string[]): void {
@@ -53,7 +67,8 @@ function main(argv: string[]): void {
     return;
   }
   if (cmd === "serve" || cmd === "app") {
-    openApp(store, cmd === "app", Number(rest[0] ?? process.env.SPILL_PORT ?? 4747)).catch((e) => {
+    const run = cmd === "app" ? openApp(store, rest[0] ? Number(rest[0]) : undefined) : serveBoard(store, Number(rest[0] ?? process.env.SPILL_PORT ?? 4747));
+    run.catch((e) => {
       console.error(e.message);
       process.exit(1);
     });
@@ -97,7 +112,7 @@ function main(argv: string[]): void {
       let letters: string[] | undefined = /^[A-Z](\s*,\s*[A-Z])*$/.test(text(1)) ? text(1).split(/\s*,\s*/) : undefined;
       if (letters && !letters.every((l) => new RegExp(`^\\s*-\\s*${l}\\.\\s`, "m").test(q.body))) letters = undefined;
       const d = letters ? b.answer({ id: q.id, picks: letters }) : b.answer({ id: q.id, text: text(1) });
-      console.log(d.kind === "question" ? `Redirected ${q.id}; Claude will rewrite it` : `Answered ${q.id} as ${summary(d)}`);
+      console.log(d.kind === "question" ? `Sent your answer to ${q.id}; Claude will act on it` : `Answered ${q.id} as ${summary(d)}`);
       break;
     }
     case "comment":

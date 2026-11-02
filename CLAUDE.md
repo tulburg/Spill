@@ -38,15 +38,25 @@ always reflect reality. Full instructions: [`.spill/SPILL.md`](.spill/SPILL.md).
 start of every session that touches product behavior.
 
 The short version:
+- **Most important: fetch and update spec state.** Check the board before each step, and never
+  leave a spec `active` when you are not building it. When you stop for any reason (done, waiting
+  on the user, blocked, switching away), move it in the same step: `done`, a question that blocks
+  it, or back to `discussing`. Check every active spec before ending a turn.
 - **Specs before code.** No feature code without an `approved` spec. Draft it on the board first.
 - **Build means build.** Approved is not a go. When the user presses Build (the spec is `queued`),
   start building it without waiting to be asked (one active spec at a time, in the order queued).
+- **Too large? Recommend a split.** At any point before a spec is done, if it has grown too large
+  to build and check as one piece, ask on the board to break it into smaller specs, naming them.
+  A split is a reorganization: each part is a complete spec that owns its questions and decisions
+  (moved from the original), and the original is rewritten as the overview.
 - **Questions go on the board, not only in chat.** Every question you need answered becomes a
   `Q-n` card. Check the board for answers (and for questions the user added) before asking again.
 - **Move cards as you work.** Set a spec `active` when you start it and `done` when it ships.
   Only one spec is `active` per session unless the user says otherwise.
-- **An answer that picks none of the options is a redirect.** Rewrite and reopen the same question;
-  do not record it as a decision or open a new question.
+- **An answer that picks none of the options is a redirect.** Read it and act on what it means:
+  an answer of the user's own is recorded as the decision; "this shouldn't be a question" drops the
+  question (comment why); only an unclear question is rewritten and reopened. Never open a new
+  question for the same thing.
 - **Never approve or reject your own cards.** Only the user moves a card to `approved`, `queued` or `rejected`
   (the board can also auto-approve; that is not you).
 - If the Spill MCP server is not connected, use the file fallback in `.spill/` described in

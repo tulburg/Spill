@@ -1,0 +1,58 @@
+{
+  "S-35": [
+    {
+      "path": "src/board.ts",
+      "change": "changed"
+    },
+    {
+      "path": "src/store.ts",
+      "change": "changed"
+    },
+    {
+      "path": "src/tools.ts",
+      "change": "changed"
+    },
+    {
+      "path": "src/mcp.ts",
+      "change": "changed"
+    },
+    {
+      "path": "src/server.ts",
+      "change": "changed"
+    },
+    {
+      "path": "ui/main.ts",
+      "change": "changed"
+    },
+    {
+      "path": "ui/app.css",
+      "change": "changed"
+    },
+    {
+      "path": ".spill/SPILL.md",
+      "change": "changed"
+    },
+    {
+      "path": "test/spill.test.ts",
+      "change": "changed"
+    }
+  ],
+  "S-36": [
+    {
+      "path": "src-tauri/src/main.rs",
+      "change": "changed"
+    },
+    {
+      "path": "src-tauri/capabilities/default.json",
+      "change": "changed"
+    },
+    {
+      "path": "src/cli.ts",
+      "change": "changed"
+    },
+    {
+      "path": ".spill/SPILL.md",
+      "change": "changed"
+    }
+  ]
+}

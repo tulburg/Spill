@@ -121,13 +121,25 @@ describe("links and decisions", () => {
     expect(store.get(q.id).links).toContainEqual({ type: "answered_by", target: d.id });
     expect(store.get(d.id).links).toContainEqual({ type: "answers", target: q.id });
   });
+
+  test("unlink moves a question from a split spec to its part", () => {
+    const big = claude.draftSpec({ title: "big" });
+    const part = claude.draftSpec({ title: "part", depends_on: [big.id] });
+    const q = claude.ask({ title: "q", blocks: [big.id] });
+    claude.unlink({ from: q.id, type: "blocks", to: big.id });
+    claude.link({ from: q.id, type: "blocks", to: part.id });
+    expect(store.get(q.id).links).toEqual([{ type: "blocks", target: part.id }]);
+    expect(store.get(big.id).links).toEqual([]);
+    expect(store.get(part.id).links).toContainEqual({ type: "blocked_by", target: q.id });
+    expect(() => claude.unlink({ from: q.id, type: "blocks", to: big.id })).toThrow("no blocks link");
+  });
 });
 
 describe("MCP instructions", () => {
   test("initialize sends the full rules to the client", () => {
     const r = handle(store, { jsonrpc: "2.0", id: 1, method: "initialize", params: {} }) as any;
     const text: string = r.result.instructions;
-    for (const rule of ["Specs before code", "Only the user approves", "redirect, not a decision", "spill_checks", "(reverted)", "Fix failing check", "spill_reply"])
+    for (const rule of ["fetch and update spec state", "A split is a reorganization", "Specs before code", "Only the user approves", "Read what the user wrote and act on what it means", "spill_checks", "(reverted)", "Fix failing check", "spill_reply", "update_request"])
       expect(text).toContain(rule);
   });
 });
@@ -150,6 +162,128 @@ describe("revert (S-5)", () => {
     expect(() => user.revert({ id: "S-1" })).toThrow("only approved, queued, active or done");
     user.setStatus({ id: "S-1", status: "approved" });
     expect(() => claude.revert({ id: "S-1" })).toThrow("Only the user");
+  });
+});
+
+describe("update requests (S-33)", () => {
+  const shipped = () => {
+    claude.draftSpec({ title: "a" });
+    user.setStatus({ id: "S-1", status: "approved" });
+    user.build({ id: "S-1" });
+    claude.setStatus({ id: "S-1", status: "active" });
+    claude.setStatus({ id: "S-1", status: "done" });
+    claude.inbox();
+  };
+
+  test("the user asks for an update on a done spec; the inbox reports it and Claude may reopen it", () => {
+    shipped();
+    expect(() => claude.setStatus({ id: "S-1", status: "active" })).toThrow("open update request");
+    user.requestUpdate({ id: "S-1", text: "keep the panel responsive" });
+    expect(claude.inbox().map((e) => `${e.action} ${e.detail}`)).toEqual(["update_request keep the panel responsive"]);
+    expect(claude.pendingUpdate(store.get("S-1"))?.texts).toEqual(["keep the panel responsive"]);
+    claude.setStatus({ id: "S-1", status: "active" });
+    expect(store.get("S-1").status).toBe("active");
+    expect(claude.pendingUpdate(store.get("S-1"))).toBeNull();
+  });
+
+  test("more text adds to the open request; a blocking question from Claude clears it", () => {
+    shipped();
+    user.requestUpdate({ id: "S-1", text: "one" });
+    user.requestUpdate({ id: "S-1", text: "two" });
+    expect(claude.pendingUpdate(store.get("S-1"))?.texts).toEqual(["one", "two"]);
+    claude.ask({ title: "Which?", body: "x\n\n- A. a\n- B. b", blocks: ["S-1"] });
+    expect(claude.pendingUpdate(store.get("S-1"))).toBeNull();
+  });
+
+  test("only the user asks, only on a done spec, and only with text", () => {
+    shipped();
+    claude.draftSpec({ title: "b" });
+    expect(() => user.requestUpdate({ id: "S-2", text: "x" })).toThrow("only a done spec");
+    expect(() => claude.requestUpdate({ id: "S-1", text: "x" })).toThrow("Only the user");
+    expect(() => user.requestUpdate({ id: "S-1", text: "  " })).toThrow("Say what should be updated");
+  });
+});
+
+describe("branch and replace (S-35)", () => {
+  const shipped = (title: string) => {
+    const s = claude.draftSpec({ title });
+    user.setStatus({ id: s.id, status: "approved" });
+    user.build({ id: s.id });
+    claude.setStatus({ id: s.id, status: "active" });
+    claude.recordFiles({ id: s.id, files: [{ path: "src/a.ts", change: "new" }, { path: "src/b.ts", change: "changed" }] });
+    claude.setStatus({ id: s.id, status: "done" });
+    return s.id;
+  };
+
+  test("a branched spec follows a done spec, in its section, linked both ways", () => {
+    const old = shipped("old");
+    store.save({ ...store.get(old), section: "SEC-1" });
+    const b = claude.draftSpec({ title: "branch", follows: old });
+    expect(b.section).toBe("SEC-1");
+    expect(b.links).toContainEqual({ type: "follows", target: old });
+    expect(store.get(old).links).toContainEqual({ type: "followed_by", target: b.id });
+    const draft = claude.draftSpec({ title: "x" });
+    expect(() => claude.draftSpec({ title: "y", follows: draft.id })).toThrow("only a done spec");
+  });
+
+  test("files Claude records make the spec's Files list; recording a path again updates it", () => {
+    const id = shipped("a");
+    claude.recordFiles({ id, files: [{ path: "src/a.ts", change: "removed" }] });
+    expect(claude.files(id)).toEqual([{ path: "src/a.ts", change: "removed" }, { path: "src/b.ts", change: "changed" }]);
+    expect(() => user.recordFiles({ id, files: [{ path: "x", change: "new" }] })).toThrow("Only Claude");
+  });
+
+  test("a replacement is a question naming the files; replaced only after the user picks A", () => {
+    const old = shipped("old");
+    const by = claude.draftSpec({ title: "new" });
+    const q = claude.proposeReplace({ id: old, by: by.id, reason: "Too big." });
+    expect(q.title).toBe(`Replace ${old} with ${by.id}?`);
+    expect(q.body).toContain("`src/a.ts`");
+    expect(q.body).toContain(`- A. Replace: remove ${old}'s code`);
+    expect(store.get(by.id).links).toContainEqual({ type: "blocked_by", target: q.id });
+    expect(() => claude.setStatus({ id: old, status: "replaced" })).toThrow("no confirmed replacement");
+    user.answer({ id: q.id, picks: ["A"] });
+    expect(store.get(by.id).status).toBe("draft");
+    claude.setStatus({ id: old, status: "replaced", note: "Removed src/a.ts" });
+    expect(store.get(old).status).toBe("replaced");
+    expect(store.get(old).links).toContainEqual({ type: "replaced_by", target: by.id });
+    expect(store.get(by.id).links).toContainEqual({ type: "replaces", target: old });
+  });
+
+  test("answer B keeps the spec", () => {
+    const old = shipped("old");
+    const by = claude.draftSpec({ title: "new" });
+    const q = claude.proposeReplace({ id: old, by: by.id });
+    user.answer({ id: q.id, picks: ["B"] });
+    expect(() => claude.setStatus({ id: old, status: "replaced" })).toThrow("no confirmed replacement");
+    expect(() => claude.proposeReplace({ id: by.id, by: old })).toThrow("only a done spec");
+  });
+});
+
+describe("spec versions (S-34)", () => {
+  const call = (name: string, args: object = {}) =>
+    handle(store, { jsonrpc: "2.0", id: 1, method: "tools/call", params: { name, arguments: args } }) as any;
+  test("each text change keeps a version; the approved one is marked; spill_get lists the changes", () => {
+    claude.draftSpec({ title: "a", body: "## Requirements\n1. one\n2. two" });
+    user.setStatus({ id: "S-1", status: "approved" });
+    claude.update({ id: "S-1", body: "## Requirements\n1. one\n2. two, faster\n3. three" });
+    claude.update({ id: "S-1", title: "a2" });
+    claude.update({ id: "S-1", body: "## Requirements\n1. one\n2. two, faster\n3. three\n4. four" });
+    const vs = claude.versions(store.get("S-1"));
+    expect(vs).toHaveLength(3);
+    expect(vs.map((v) => v.approved)).toEqual([true, false, false]);
+    expect(vs.map((v) => v.actor)).toEqual(["claude", "claude", "claude"]);
+    const text = call("spill_get", { id: "S-1" }).result.content[0].text;
+    expect(text).toContain("## Changes since the approved version");
+    expect(text).toContain("+3 -1 lines");
+    expect(text).toContain("- 2. two\n");
+    expect(text).toContain("+ 4. four");
+  });
+
+  test("a spec never edited has no versions and no changes", () => {
+    claude.draftSpec({ title: "a", body: "x" });
+    expect(claude.versions(store.get("S-1"))).toEqual([]);
+    expect(call("spill_get", { id: "S-1" }).result.content[0].text).not.toContain("Changes since");
   });
 });
 
@@ -211,13 +345,13 @@ describe("mcp", () => {
   const call = (name: string, args: object = {}) =>
     handle(store, { jsonrpc: "2.0", id: 1, method: "tools/call", params: { name, arguments: args } }) as any;
 
-  test("initialize and list the 14 tools", () => {
+  test("initialize and list the 17 tools", () => {
     const init = handle(store, { jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2025-06-18" } }) as any;
     expect(init.result.serverInfo.name).toBe("spill");
     const list = handle(store, { jsonrpc: "2.0", id: 2, method: "tools/list" }) as any;
     expect(list.result.tools.map((t: any) => t.name)).toEqual([
       "spill_board", "spill_get", "spill_ask", "spill_draft_spec", "spill_update",
-      "spill_set_status", "spill_comment", "spill_link", "spill_record", "spill_rejections", "spill_focus", "spill_checks", "spill_reply", "spill_inbox",
+      "spill_set_status", "spill_comment", "spill_link", "spill_unlink", "spill_record", "spill_files", "spill_propose_replace", "spill_rejections", "spill_focus", "spill_checks", "spill_reply", "spill_inbox",
     ]);
   });
 

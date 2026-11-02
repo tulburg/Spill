@@ -1,7 +1,7 @@
 {
   "identifier": "default",
-  "description": "Lets the board page served by `spill app` drag the window from its header.",
-  "windows": ["main"],
+  "description": "Lets each project window's board page drag the window from its header.",
+  "windows": ["*"],
   "remote": { "urls": ["http://localhost:*"] },
   "permissions": ["core:default", "core:window:allow-start-dragging"]
 }

@@ -455,5 +455,171 @@
         "detail": "Copy: answered Q-12 by CLI; D-13 was first in the strip 146ms after the command started"
       }
     ]
+  },
+  "S-31": {
+    "at": "2026-11-02T08:37:31.480Z",
+    "running": false,
+    "results": [
+      {
+        "name": "Idle board shows the summary",
+        "pass": true,
+        "detail": "No active spec, no spotlight: Pending approval, Up next, Last built, Recent decisions"
+      },
+      {
+        "name": "Spotlit queued spec shown once",
+        "pass": true,
+        "detail": "S-29 in the spotlight was left out of Up next"
+      },
+      {
+        "name": "Chevron collapses to counts",
+        "pass": true,
+        "detail": "One chip per non-empty group; 42px tall row"
+      },
+      {
+        "name": "Collapse remembered, no auto-expand",
+        "pass": true,
+        "detail": "Stayed collapsed after reload and after a spotlight change"
+      },
+      {
+        "name": "Building chip states",
+        "pass": true,
+        "detail": "Spinner while building, amber Q-15 chip and border when held, dashed 3h chip when quiet"
+      }
+    ]
+  },
+  "S-33": {
+    "at": "2026-11-02T08:57:03.497Z",
+    "running": false,
+    "results": [
+      {
+        "name": "Done sheet: multiline box, Update primary, no Revert",
+        "pass": true,
+        "detail": "Placeholder \"How should S-21 be updated?\"; only button is Update; Shift+Enter kept a 2-line update"
+      },
+      {
+        "name": "Inbox lists the update",
+        "pass": true,
+        "detail": "update_request S-21 with both lines"
+      },
+      {
+        "name": "Update requested until Claude acts",
+        "pass": true,
+        "detail": "Pill, card status and dashed border; Your update box; cleared once Claude set it active"
+      },
+      {
+        "name": "Reopen only with an open request",
+        "pass": true,
+        "detail": "S-21 with a request went active; S-12 without one was refused"
+      },
+      {
+        "name": "Update spec and re-approve",
+        "pass": true,
+        "detail": "S-12 updated and set to draft by Claude, waiting for approval"
+      }
+    ]
+  },
+  "S-34": {
+    "at": "2026-11-02T09:01:56.844Z",
+    "running": false,
+    "results": [
+      {
+        "name": "Two text updates leave versions with times and authors",
+        "pass": true,
+        "detail": "S-31 on a copy: original plus 2 versions in .spill/versions/S-31.jsonl, each with time and actor; unit test covers it too"
+      },
+      {
+        "name": "Changed since approved and the diff",
+        "pass": true,
+        "detail": "Indigo pill; Overview opens on the diff vs the approved version: +3 -2, removed red struck, added green, unchanged runs folded by section"
+      },
+      {
+        "name": "Older version diffs against current",
+        "pass": true,
+        "detail": "Picking v2 showed +2 -1; \"Nothing, show the spec\" returns to the plain text"
+      },
+      {
+        "name": "spill_get lists changes since approved",
+        "pass": true,
+        "detail": "Ends with \"Changes since the approved version: +3 -2 lines\" and the changed lines"
+      }
+    ]
+  },
+  "S-35": {
+    "at": "2026-11-02T09:11:40.241Z",
+    "running": false,
+    "results": [
+      {
+        "name": "Branched spec linked and drawn next to the done spec",
+        "pass": true,
+        "detail": "S-37 follows S-31 on a board copy; drawn right after it with a Follows S-31 pill"
+      },
+      {
+        "name": "Recorded files show in the Files list",
+        "pass": true,
+        "detail": "Code tab lists 3 files with new/changed/removed"
+      },
+      {
+        "name": "Replacement proposal names spec, replacement and files",
+        "pass": true,
+        "detail": "Q-24 Replace S-31 with S-38? with a Replacement pill and the file list"
+      },
+      {
+        "name": "No removal before confirmation; after it, recorded, dimmed and linked",
+        "pass": true,
+        "detail": "replaced refused before A; after A, removed file recorded, card dimmed Replaced by S-38, replaced_by/replaces links, questions and decisions kept"
+      }
+    ]
+  },
+  "S-32": {
+    "at": "2026-11-02T09:11:53.563Z",
+    "running": false,
+    "results": [
+      {
+        "name": "S-33 done",
+        "pass": true,
+        "detail": "Update requests on done specs (named Update per Q-20)"
+      },
+      {
+        "name": "S-34 done",
+        "pass": true,
+        "detail": "Versions and diff view"
+      },
+      {
+        "name": "S-35 done",
+        "pass": true,
+        "detail": "Branch, Files list, replace with confirmation"
+      }
+    ]
+  },
+  "S-36": {
+    "at": "2026-11-02T09:28:33.939Z",
+    "running": false,
+    "results": [
+      {
+        "name": "Open Recent lists both projects, newest first",
+        "pass": true,
+        "detail": "Recent file order verified; menu confirmed by the user (D-25)"
+      },
+      {
+        "name": "Recent project opens on a free port, or brings its window forward",
+        "pass": true,
+        "detail": "Free ports in one app process; reopening started no second server"
+      },
+      {
+        "name": "Open Project on a folder without .spill shows an error",
+        "pass": true,
+        "detail": "Alert shown, nothing opened; picker confirmed by the user (D-25)"
+      },
+      {
+        "name": "Window menu lists both and switches",
+        "pass": true,
+        "detail": "Confirmed by the user (D-25)"
+      },
+      {
+        "name": "Closing a window removes it and stops its server",
+        "pass": true,
+        "detail": "Confirmed by the user (D-25)"
+      }
+    ]
   }
 }

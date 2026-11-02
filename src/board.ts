@@ -1,8 +1,11 @@
-import { type Actor, type Card, type CheckRun, type Focus, type Kind, Store, kindOf } from "./store";
+import { type DiffLine, lineDiff } from "./diff";
+import { type Actor, type Card, type CheckRun, type FileEntry, type Focus, type Kind, Store, type Version, kindOf } from "./store";
 import { replyTarget, threads } from "./threads";
+import { pendingUpdate } from "./updates";
 
-const INVERSE: Record<string, string> = { blocks: "blocked_by", answers: "answered_by" };
-const LINK_TYPES = ["blocks", "answers", "depends_on"];
+const INVERSE: Record<string, string> = { blocks: "blocked_by", answers: "answered_by", follows: "followed_by" };
+const LINK_TYPES = ["blocks", "answers", "depends_on", "follows"];
+export const REPLACE_OPTIONS = (old: string, by: string) => `- A. Replace: remove ${old}'s code\n- B. Keep ${old}; branch ${by} from it instead`;
 
 // Requirements Claude has checked off in comments: "Req 2 done", "Reqs 1, 3 and 4 done", "Reqs 1-3 done".
 // Same parsing as the app's progress bar.
@@ -106,11 +109,19 @@ export class Board {
     return q;
   }
 
-  draftSpec(args: { title: string; body?: string; section?: string; depends_on?: string[] }): Card {
-    const s = this.create("spec", args.title, args.body ?? "", "draft", args.section);
+  draftSpec(args: { title: string; body?: string; section?: string; depends_on?: string[]; follows?: string }): Card {
+    // S-35: a branched spec follows a done spec and sits next to it, in its section.
+    const followed = args.follows ? this.store.get(args.follows) : undefined;
+    if (followed && (followed.kind !== "spec" || followed.status !== "done")) throw new Error(`${followed.id} is ${followed.status}; a spec can follow only a done spec`);
+    const s = this.create("spec", args.title, args.body ?? "", "draft", args.section ?? followed?.section);
     for (const d of args.depends_on ?? []) {
       this.store.get(d);
       this.addLink(s, "depends_on", d);
+    }
+    if (followed) {
+      this.addLink(s, "follows", followed.id);
+      this.addLink(followed, "followed_by", s.id);
+      this.store.save(followed);
     }
     this.store.save(s);
     this.store.log({ actor: this.actor, action: "draft_spec", card: s.id, detail: s.title });
@@ -125,8 +136,17 @@ export class Board {
       changed.push("title");
     }
     if (args.body !== undefined) {
+      const before = card.body;
       card.body = args.body.trim() ? `${args.body.trim()}\n\n` : "";
       changed.push("body");
+      // S-34: a spec keeps every version of its text. The first edit also saves the original.
+      if (card.kind === "spec" && card.body.trim() !== before.trim()) {
+        if (!this.store.versions(card.id).length) {
+          const born = this.store.events().find((e) => e.card === card.id);
+          this.store.addVersion(card.id, { at: born?.at ?? new Date(0).toISOString(), actor: born?.actor ?? this.actor, body: before, seq: born ? this.store.events().indexOf(born) + 1 : 0 });
+        }
+        this.store.addVersion(card.id, { at: new Date().toISOString(), actor: this.actor, body: card.body, seq: this.store.events().length });
+      }
     }
     if (args.section !== undefined) {
       card.section = this.checkSection(args.section);
@@ -153,8 +173,16 @@ export class Board {
     }
     // S-29: approved, then the user presses Build. Claude starts only queued specs.
     if (args.status === "queued" && card.status !== "approved") throw new Error(`${card.id} is ${card.status}; only an approved spec can be queued to build`);
-    if (args.status === "active" && this.actor === "claude" && card.status !== "queued")
-      throw new Error(`${card.id} is ${card.status}; start only specs the user queued with Build`);
+    // S-33: an open update request on a done spec lets Claude build it again without a new approval.
+    if (args.status === "active" && this.actor === "claude" && card.status !== "queued" && !(card.status === "done" && this.pendingUpdate(card)))
+      throw new Error(`${card.id} is ${card.status}; start only specs the user queued with Build, or a done spec with an open update request`);
+    // S-35: only a done spec whose replacement the user confirmed (answer A) becomes replaced.
+    let replacedBy: string | undefined;
+    if (args.status === "replaced") {
+      if (card.status !== "done") throw new Error(`${card.id} is ${card.status}; only a done spec can be replaced`);
+      replacedBy = this.confirmedReplacement(card);
+      if (!replacedBy) throw new Error(`${card.id} has no confirmed replacement. Propose it with spill_propose_replace and wait for the user to pick A`);
+    }
     // S-21: a spec with open questions cannot be approved.
     if (args.status === "approved" && card.kind === "spec") {
       const open = this.openQuestions(card);
@@ -163,6 +191,12 @@ export class Board {
     const from = card.status;
     card.status = args.status;
     if (args.note) this.addComment(card, args.note);
+    if (replacedBy) {
+      this.addLink(card, "replaced_by", replacedBy);
+      const by = this.store.get(replacedBy);
+      this.addLink(by, "replaces", card.id);
+      this.store.save(by);
+    }
     this.store.save(card);
     this.store.log({ actor: this.actor, action: "status", card: card.id, detail: `${from} -> ${args.status}${args.note ? `: ${args.note}` : ""}` });
     // D-11: the last child spec done approves the parent.
@@ -210,6 +244,94 @@ export class Board {
     return card;
   }
 
+  // S-33: the user asks for an update to a done spec. Claude handles it on the same spec when it can.
+  requestUpdate(args: { id: string; text: string }): Card {
+    if (this.actor !== "user") throw new Error("Only the user can ask for an update");
+    const text = args.text?.trim();
+    if (!text) throw new Error("Say what should be updated");
+    const card = this.store.get(args.id);
+    if (card.kind !== "spec" || card.status !== "done") throw new Error(`${card.id} is ${card.status}; only a done spec takes an update request`);
+    this.addComment(card, `Update: ${text}`);
+    this.store.save(card);
+    this.store.log({ actor: this.actor, action: "update_request", card: card.id, detail: text });
+    return card;
+  }
+
+  pendingUpdate(card: Card): { texts: string[]; at: string } | null {
+    return pendingUpdate(card, this.store.all(), this.store.events());
+  }
+
+  // S-34: a spec's versions, oldest first; the one it had when last approved is marked.
+  versions(card: Card): (Version & { approved: boolean })[] {
+    const vs = this.store.versions(card.id);
+    const events = this.store.events();
+    const approval = events.findLastIndex((e) => e.card === card.id && e.action === "status" && /-> approved/.test(e.detail ?? ""));
+    const approvedAt = approval >= 0 ? events[approval].at : undefined;
+    const ai = approvedAt ? vs.findLastIndex((v) => (v.seq !== undefined ? v.seq <= approval : v.at <= approvedAt)) : -1;
+    return vs.map((v, i) => ({ ...v, approved: i === ai }));
+  }
+
+  // S-34: what changed since the approved version, when the text differs from it.
+  changesSinceApproved(card: Card): { at: string; lines: DiffLine[] } | null {
+    const v = this.versions(card).find((x) => x.approved);
+    if (!v || v.body.trim() === card.body.trim()) return null;
+    return { at: v.at, lines: lineDiff(v.body, card.body).filter((l) => l.op !== "same") };
+  }
+
+  // S-35 / D-20: the files Claude touched building a spec. Recording a path again updates its change.
+  recordFiles(args: { id: string; files: FileEntry[] }): FileEntry[] {
+    if (this.actor !== "claude") throw new Error("Only Claude records files");
+    const card = this.store.get(args.id);
+    if (card.kind !== "spec") throw new Error(`${card.id} is not a spec`);
+    if (!args.files?.length) throw new Error("List at least one file");
+    const list = [...(this.store.files()[card.id] ?? [])];
+    for (const f of args.files) {
+      if (!f.path?.trim()) throw new Error("Each file needs a path");
+      if (!["new", "changed", "removed"].includes(f.change)) throw new Error(`${f.path}: change must be new, changed or removed`);
+      const i = list.findIndex((x) => x.path === f.path.trim());
+      const entry = { path: f.path.trim(), change: f.change };
+      if (i >= 0) list[i] = entry;
+      else list.push(entry);
+    }
+    this.store.saveFiles(card.id, list);
+    this.store.log({ actor: this.actor, action: "files", card: card.id, detail: args.files.map((f) => `${f.change} ${f.path}`).join(", ") });
+    return list;
+  }
+
+  files(id: string): FileEntry[] {
+    return this.store.files()[id] ?? [];
+  }
+
+  // S-35: propose replacing a done spec. A question names both specs and the files to remove; it
+  // blocks the replacement, and nothing is removed until the user picks A.
+  proposeReplace(args: { id: string; by: string; reason?: string }): Card {
+    const old = this.store.get(args.id);
+    const by = this.store.get(args.by);
+    if (old.kind !== "spec" || old.status !== "done") throw new Error(`${old.id} is ${old.status}; only a done spec can be replaced`);
+    if (by.kind !== "spec" || by.id === old.id) throw new Error(`${by.id} must be another spec`);
+    const files = this.files(old.id).filter((f) => f.change !== "removed");
+    const list = files.length ? files.map((f) => `- \`${f.path}\``).join("\n") : `(${old.id} has no Files list; Claude finds its code before removing it)`;
+    const body = [
+      `${args.reason?.trim() ? `${args.reason.trim()} ` : ""}${by.id} "${by.title}" replaces ${old.id} "${old.title}". These files from ${old.id} would be removed or reverted:`,
+      list,
+      REPLACE_OPTIONS(old.id, by.id),
+    ].join("\n\n");
+    const q = this.ask({ title: `Replace ${old.id} with ${by.id}?`, body, blocks: [by.id], section: old.section ?? undefined });
+    this.addLink(q, "replaces", old.id);
+    this.store.save(q);
+    return q;
+  }
+
+  // The replacement spec of a confirmed proposal for `card`, if the user picked A.
+  confirmedReplacement(card: Card): string | undefined {
+    for (const q of this.store.all()) {
+      if (q.kind !== "question" || q.status !== "answered" || !q.links.some((l) => l.type === "replaces" && l.target === card.id)) continue;
+      const d = q.links.filter((l) => l.type === "answered_by").map((l) => this.store.all().find((c) => c.id === l.target)).find(Boolean);
+      if (d && /^A\./.test(d.title)) return q.links.find((l) => l.type === "blocks")?.target;
+    }
+    return undefined;
+  }
+
   openQuestions(card: Card): string[] {
     return card.links
       .filter((l) => l.type === "blocked_by")
@@ -247,6 +369,25 @@ export class Board {
     return a;
   }
 
+  // Remove a link and its inverse, e.g. to move a question from a spec to the part it belongs to
+  // when the spec is split.
+  unlink(args: { from: string; type: string; to: string }): Card {
+    if (!LINK_TYPES.includes(args.type)) throw new Error(`Link type must be one of ${LINK_TYPES.join(", ")}`);
+    const a = this.store.get(args.from);
+    const b = this.store.get(args.to);
+    const drop = (c: Card, type: string, target: string) => {
+      const before = c.links.length;
+      c.links = c.links.filter((l) => !(l.type === type && l.target === target));
+      return c.links.length < before;
+    };
+    if (!drop(a, args.type, b.id)) throw new Error(`${a.id} has no ${args.type} link to ${b.id}`);
+    this.store.save(a);
+    const inverse = INVERSE[args.type];
+    if (inverse && drop(b, inverse, a.id)) this.store.save(b);
+    this.store.log({ actor: this.actor, action: "unlink", card: a.id, detail: `${args.type} ${b.id}` });
+    return a;
+  }
+
   // Record a decision and close the question it answers.
   record(args: { title: string; body?: string; question?: string; section?: string }): Card {
     const q = args.question ? this.store.get(args.question) : undefined;
@@ -262,7 +403,8 @@ export class Board {
     this.store.log({ actor: this.actor, action: "record", card: d.id, detail: q ? `answers ${q.id}: ${d.title}` : d.title });
     // D-11 / S-29: the last blocking question answered approves the spec. A design question
     // approves only when its answer is A; "Needs changes" leaves the spec waiting.
-    if (q && !(q.design && !/^A\./.test(d.title)))
+    // S-35: a replacement answer settles the old spec only; the replacement still needs its own approval.
+    if (q && !(q.design && !/^A\./.test(d.title)) && !q.links.some((l) => l.type === "replaces"))
       for (const id of q.links.filter((l) => l.type === "blocks").map((l) => l.target))
         if (this.store.has(id)) this.autoApprove(this.store.get(id), q.design ? "design approved" : "all questions answered");
     return d;
@@ -271,7 +413,7 @@ export class Board {
   // S-20/S-24: the user's answer to an open question, from the app or the CLI. Picks are option
   // letters ("- A. text" lines in the body); text is a free answer, alone or added to the picks.
   // S-26: free text alone on a question with options is a redirect. No decision is recorded; the
-  // question stays open for Claude to rewrite, and the question card itself is returned.
+  // question stays open for Claude to record, drop or rewrite, and the question card itself is returned.
   answer(args: { id: string; picks?: string[]; text?: string }): Card {
     const q = this.store.get(args.id);
     if (q.kind !== "question" || q.status !== "open") throw new Error(`${q.id} is not an open question`);

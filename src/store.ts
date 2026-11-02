@@ -135,6 +135,21 @@ export interface Focus {
 }
 
 // S-13: the latest acceptance check run for a spec, written by Claude (D-4).
+// S-34: one version of a spec's text: what it became at `at`, and who wrote it.
+export interface Version {
+  at: string;
+  actor: Actor;
+  body: string;
+  // How many events the log held when the version was saved; orders it against approvals made in the same millisecond.
+  seq?: number;
+}
+
+// S-35: a file Claude touched building a spec (D-20), or removed when the spec was replaced.
+export interface FileEntry {
+  path: string;
+  change: "new" | "changed" | "removed";
+}
+
 export interface CheckRun {
   at: string;
   running: boolean;
@@ -161,6 +176,8 @@ export class Store {
     const statuses = raw.statuses ?? { spec: [], question: [] };
     // S-29: boards made before queued existed get it after approved.
     if (statuses.spec.includes("approved") && !statuses.spec.includes("queued")) statuses.spec.splice(statuses.spec.indexOf("approved") + 1, 0, "queued");
+    // S-35: a done spec that another spec replaced.
+    if (statuses.spec.includes("done") && !statuses.spec.includes("replaced")) statuses.spec.push("replaced");
     const userOnly: string[] = raw.userOnlyStatuses ?? ["approved", "rejected"];
     if (!userOnly.includes("queued")) userOnly.push("queued");
     return {
@@ -251,6 +268,31 @@ export class Store {
     const p = join(this.dir, "focus.json");
     if (f) writeFileSync(p, JSON.stringify(f, null, 2) + "\n");
     else if (existsSync(p)) rmSync(p);
+  }
+
+  versions(id: string): Version[] {
+    const p = join(this.dir, "versions", `${id}.jsonl`);
+    if (!existsSync(p)) return [];
+    return readFileSync(p, "utf8")
+      .split("\n")
+      .filter(Boolean)
+      .map((l) => JSON.parse(l));
+  }
+
+  addVersion(id: string, v: Version): void {
+    mkdirSync(join(this.dir, "versions"), { recursive: true });
+    appendFileSync(join(this.dir, "versions", `${id}.jsonl`), JSON.stringify(v) + "\n");
+  }
+
+  files(): Record<string, FileEntry[]> {
+    const p = join(this.dir, "files.json");
+    return existsSync(p) ? JSON.parse(readFileSync(p, "utf8")) : {};
+  }
+
+  saveFiles(id: string, list: FileEntry[]): void {
+    const all = this.files();
+    all[id] = list;
+    writeFileSync(join(this.dir, "files.json"), JSON.stringify(all, null, 2) + "\n");
   }
 
   checks(): Record<string, CheckRun> {

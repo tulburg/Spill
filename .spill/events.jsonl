@@ -337,3 +337,118 @@
 {"at":"2026-10-31T11:13:29.429Z","actor":"claude","action":"reply","card":"-","detail":"Done: when you click a reply to expand it, its prompt above unwraps to the full text too; clicking again folds both back. Nothing else changed. Cmd+R to see it.","thread":"2026-10-31T11:12:35.483Z"}
 {"at":"2026-10-31T11:15:21.235Z","actor":"user","action":"message","card":"-","detail":"Not just clicking the response box should toggle the expand collapse, just clicking the card itself should toggle [attached: /Users/tulburg/Developer/Spill/.spill/attachments/2026-10-31T11-15-21-234Z-image.png]"}
 {"at":"2026-10-31T11:16:21.318Z","actor":"claude","action":"reply","card":"-","detail":"Done: clicking anywhere on a thread card now expands or collapses the whole thread (all its replies and prompts). Reply, attachments and the reply box do not trigger it. Cmd+R to see it.","thread":"2026-10-31T11:15:21.235Z"}
+{"at":"2026-11-02T08:03:40.527Z","actor":"claude","action":"draft_spec","card":"S-31","detail":"Bottom-left panel: full summary, collapsible to counts"}
+{"at":"2026-11-02T08:03:51.488Z","actor":"claude","action":"ask","card":"Q-12","detail":"Which counts go in the collapsed row?"}
+{"at":"2026-11-02T08:03:51.497Z","actor":"claude","action":"ask","card":"Q-13","detail":"Is the panel collapsed or open when Spill starts?"}
+{"at":"2026-11-02T08:03:51.502Z","actor":"claude","action":"focus","card":"S-31","detail":"discussing S-31; next Q-12, Q-13: Bottom-left panel as a full summary that collapses to counts"}
+{"at":"2026-11-02T08:08:07.642Z","actor":"user","action":"record","card":"D-13","detail":"answers Q-12: A, B, C, D, E, F, G, H. Building (the active spec, colored by building, waiting or quiet); Spotlight (cards being discussed and up next); Pending approval; Open questions waiting on you; Rejected, waiting on Claude; Up next (queued specs); Recent decisions; Last built"}
+{"at":"2026-11-02T08:08:47.891Z","actor":"user","action":"redirect","card":"Q-13","detail":"Always open unless closed by the user. Remember choice"}
+{"at":"2026-11-02T08:13:44.542Z","actor":"claude","action":"record","card":"D-14","detail":"answers Q-13: Panel is always open unless you close it; the choice is remembered"}
+{"at":"2026-11-02T08:13:44.546Z","actor":"auto","action":"status","card":"S-31","detail":"draft -> approved (auto: all questions answered)"}
+{"at":"2026-11-02T08:13:53.437Z","actor":"user","action":"status","card":"S-31","detail":"approved -> queued"}
+{"at":"2026-11-02T08:13:59.893Z","actor":"claude","action":"update","card":"S-31","detail":"body"}
+{"at":"2026-11-02T08:13:59.901Z","actor":"claude","action":"comment","card":"S-31","detail":"Updated with D-13 (all 8 groups get a chip; req 6) and D-14 (always open unless you close it, choice remembered, never toggles by itself; req 8 and check 4). Next: the Paper design (req 9), then a design question before building."}
+{"at":"2026-11-02T08:13:59.908Z","actor":"claude","action":"focus","card":"S-31","detail":"discussing S-31: S-31 approved; design in Paper comes next"}
+{"at":"2026-11-02T08:14:07.328Z","actor":"claude","action":"status","card":"S-31","detail":"queued -> active: Starting with the Paper design (req 9)."}
+{"at":"2026-11-02T08:17:05.940Z","actor":"claude","action":"ask","card":"Q-14","detail":"Design approval: bottom-left summary (S-31)"}
+{"at":"2026-11-02T08:17:10.473Z","actor":"claude","action":"focus","card":"Q-14","detail":"discussing Q-14; next S-31: Design for S-31 is drawn in Paper; waiting on your sign-off"}
+{"at":"2026-11-02T08:21:03.460Z","actor":"user","action":"record","card":"D-15","detail":"answers Q-14: A. Approve this design"}
+{"at":"2026-11-02T08:34:20.966Z","actor":"claude","action":"comment","card":"S-31","detail":"Design approved (D-15). Building it now."}
+{"at":"2026-11-02T08:34:20.974Z","actor":"claude","action":"focus","card":"S-31","detail":"discussing S-31: Building the bottom-left summary"}
+{"at":"2026-11-02T08:37:31.473Z","actor":"claude","action":"comment","card":"S-31","detail":"Reqs 1-9 done"}
+{"at":"2026-11-02T08:37:31.480Z","actor":"claude","action":"checks","card":"S-31","detail":"5 of 5 passed"}
+{"at":"2026-11-02T08:37:31.486Z","actor":"claude","action":"status","card":"S-31","detail":"active -> done: Built and checked on a copy of the board."}
+{"at":"2026-11-02T08:37:31.490Z","actor":"claude","action":"focus","card":"-","detail":"cleared"}
+{"at":"2026-11-02T08:38:19.889Z","actor":"claude","action":"draft_spec","card":"S-32","detail":"Done specs: ask for a change instead of reverting"}
+{"at":"2026-11-02T08:38:29.027Z","actor":"claude","action":"ask","card":"Q-15","detail":"What does Claude do with a change request on a done spec?"}
+{"at":"2026-11-02T08:38:29.033Z","actor":"claude","action":"ask","card":"Q-16","detail":"Where does Revert go on a done spec?"}
+{"at":"2026-11-02T08:38:29.038Z","actor":"claude","action":"focus","card":"S-32","detail":"discussing S-32; next Q-15, Q-16: Done specs: ask for a change instead of reverting"}
+{"at":"2026-11-02T08:41:33.453Z","actor":"user","action":"redirect","card":"Q-15","detail":"There’s another way. Claude decides of course. But Same spec can becomes active, can throw question, can be updated (waiting again for approval) but its best to show what changed / version of the spec - diff view). And only and only if the requested change is too big, then a branched spec or a deletion of the existing spec to be replaced with a brand new spec. Deletion of spec means deletion of all implementation and code generated for that spec."}
+{"at":"2026-11-02T08:42:03.578Z","actor":"user","action":"record","card":"D-16","detail":"answers Q-16: C. Removed for done specs; ask for a change instead."}
+{"at":"2026-11-02T08:42:44.683Z","actor":"claude","action":"record","card":"D-17","detail":"answers Q-15: Claude decides: reopen the same spec, ask, or update it with a diff; replace it only when the change is too big"}
+{"at":"2026-11-02T08:42:44.687Z","actor":"auto","action":"status","card":"S-32","detail":"draft -> approved (auto: all questions answered)"}
+{"at":"2026-11-02T08:42:57.343Z","actor":"claude","action":"ask","card":"Q-17","detail":"Split S-32 into three specs?"}
+{"at":"2026-11-02T08:42:57.363Z","actor":"claude","action":"focus","card":"Q-17","detail":"discussing Q-17; next S-32: S-32 grew with D-17; proposing a split into three specs"}
+{"at":"2026-11-02T08:43:30.268Z","actor":"user","action":"record","card":"D-18","detail":"answers Q-17: A. Split into these three"}
+{"at":"2026-11-02T08:43:34.259Z","actor":"user","action":"status","card":"S-32","detail":"approved -> queued"}
+{"at":"2026-11-02T08:44:15.106Z","actor":"claude","action":"draft_spec","card":"S-33","detail":"Ask for a change on a done spec"}
+{"at":"2026-11-02T08:44:15.114Z","actor":"claude","action":"draft_spec","card":"S-34","detail":"Spec versions and a diff view"}
+{"at":"2026-11-02T08:44:15.118Z","actor":"claude","action":"draft_spec","card":"S-35","detail":"Replace a spec when a change is too big"}
+{"at":"2026-11-02T08:44:31.796Z","actor":"claude","action":"unlink","card":"Q-16","detail":"blocks S-32"}
+{"at":"2026-11-02T08:44:31.802Z","actor":"claude","action":"link","card":"Q-16","detail":"blocks S-33"}
+{"at":"2026-11-02T08:44:31.807Z","actor":"claude","action":"ask","card":"Q-18","detail":"What happens to a deleted spec's card?"}
+{"at":"2026-11-02T08:44:31.811Z","actor":"claude","action":"ask","card":"Q-19","detail":"How does Claude know which code belongs to a spec?"}
+{"at":"2026-11-02T08:44:31.817Z","actor":"claude","action":"update","card":"S-32","detail":"body"}
+{"at":"2026-11-02T08:44:31.822Z","actor":"claude","action":"status","card":"S-32","detail":"queued -> discussing: Split per D-18 into S-33, S-34 and S-35, which get approved and built one by one. Q-16 and D-16 moved to S-33. Q-15, D-17, Q-17 and D-18 stay here. New questions Q-18 and Q-19 are on S-35."}
+{"at":"2026-11-02T08:44:31.936Z","actor":"user","action":"status","card":"S-33","detail":"draft -> approved"}
+{"at":"2026-11-02T08:44:33.781Z","actor":"user","action":"status","card":"S-33","detail":"approved -> queued"}
+{"at":"2026-11-02T08:44:36.241Z","actor":"user","action":"status","card":"S-34","detail":"draft -> approved"}
+{"at":"2026-11-02T08:44:37.267Z","actor":"claude","action":"focus","card":"S-33","detail":"discussing S-33; next S-34, Q-18, Q-19: S-32 split into three parts; S-33 is first and ready to approve"}
+{"at":"2026-11-02T08:44:37.352Z","actor":"user","action":"status","card":"S-34","detail":"approved -> queued"}
+{"at":"2026-11-02T08:44:55.546Z","actor":"claude","action":"status","card":"S-33","detail":"queued -> active: Starting with the Paper design (req 8)."}
+{"at":"2026-11-02T08:44:55.552Z","actor":"claude","action":"focus","card":"S-33","detail":"discussing S-33; next S-34: Designing S-33 in Paper"}
+{"at":"2026-11-02T08:45:06.948Z","actor":"user","action":"record","card":"D-19","detail":"answers Q-18: A. The card stays as \"Replaced\", dimmed, linked to its replacement, with its questions and decisions kept."}
+{"at":"2026-11-02T08:46:22.826Z","actor":"claude","action":"ask","card":"Q-20","detail":"Design approval: ask for a change (S-33)"}
+{"at":"2026-11-02T08:46:22.833Z","actor":"claude","action":"focus","card":"Q-20","detail":"discussing Q-20; next S-33, S-34: S-33 design drawn in Paper; waiting on your sign-off"}
+{"at":"2026-11-02T08:47:44.618Z","actor":"user","action":"record","card":"D-20","detail":"answers Q-19: A. Claude records the files it touched on the spec as it builds (a \"Files\" list on the card), and removal works from that list."}
+{"at":"2026-11-02T08:47:44.622Z","actor":"auto","action":"status","card":"S-35","detail":"draft -> approved (auto: all questions answered)"}
+{"at":"2026-11-02T08:47:52.240Z","actor":"user","action":"status","card":"S-35","detail":"approved -> queued"}
+{"at":"2026-11-02T08:48:03.962Z","actor":"claude","action":"update","card":"S-35","detail":"body"}
+{"at":"2026-11-02T08:48:03.967Z","actor":"claude","action":"comment","card":"S-35","detail":"Updated with D-19 (card stays as Replaced; req 6) and D-20 (Files list recorded while building; reqs 2, 3 and 5)."}
+{"at":"2026-11-02T08:50:13.875Z","actor":"user","action":"redirect","card":"Q-20","detail":"Its more of an update than a “change”, just updating the spec."}
+{"at":"2026-11-02T08:50:37.167Z","actor":"claude","action":"update","card":"Q-20","detail":"body"}
+{"at":"2026-11-02T08:50:37.172Z","actor":"claude","action":"comment","card":"Q-20","detail":"Reworked per your answer: \"change\" is now \"update\" everywhere (Update spec button, Update requested pill and card, Your update box). Reopened for approval."}
+{"at":"2026-11-02T08:50:48.478Z","actor":"claude","action":"update","card":"S-33","detail":"title, body"}
+{"at":"2026-11-02T08:50:53.900Z","actor":"claude","action":"update","card":"Q-20","detail":"title"}
+{"at":"2026-11-02T08:51:05.029Z","actor":"user","action":"message","card":"-","detail":"Btw, spill file menu should show recently opened projects and window menu should list current windows"}
+{"at":"2026-11-02T08:51:37.371Z","actor":"claude","action":"draft_spec","card":"S-36","detail":"File menu recent projects and Window menu of open windows"}
+{"at":"2026-11-02T08:51:37.378Z","actor":"claude","action":"ask","card":"Q-21","detail":"One Spill app for all windows, or one per project?"}
+{"at":"2026-11-02T08:51:37.382Z","actor":"claude","action":"reply","card":"-","detail":"Drafted as S-36 (File > Open Recent and Open Project..., Window menu of open windows). One question first, Q-21: one Spill app holding every project window (my pick) or one process per project as today. It is queued behind S-33, S-34 and S-35 once you approve it.","thread":"2026-11-02T08:51:05.029Z"}
+{"at":"2026-11-02T08:52:02.851Z","actor":"user","action":"redirect","card":"Q-20","detail":"Approved with comments"}
+{"at":"2026-11-02T08:52:43.250Z","actor":"claude","action":"record","card":"D-21","detail":"answers Q-20: A. Approve this design, with comments: button reads just \"Update\"; the box is multiline"}
+{"at":"2026-11-02T08:52:58.183Z","actor":"user","action":"status","card":"S-32","detail":"discussing -> approved"}
+{"at":"2026-11-02T08:52:59.346Z","actor":"user","action":"status","card":"S-32","detail":"approved -> queued"}
+{"at":"2026-11-02T08:52:59.372Z","actor":"claude","action":"update","card":"S-33","detail":"body"}
+{"at":"2026-11-02T08:52:59.376Z","actor":"claude","action":"comment","card":"S-33","detail":"Design approved (D-21): the button reads \"Update\" and the box is multiline. Building now."}
+{"at":"2026-11-02T08:52:59.379Z","actor":"claude","action":"focus","card":"S-33","detail":"discussing S-33; next S-34, S-35: Building S-33: update a done spec"}
+{"at":"2026-11-02T08:54:24.396Z","actor":"user","action":"record","card":"D-22","detail":"answers Q-21: A. One Spill app process holds every project window; each window still talks to its own project's board server, which the app starts and stops. Running `spill app` in a folder while Spill is open adds a window to the running app."}
+{"at":"2026-11-02T08:54:24.399Z","actor":"auto","action":"status","card":"S-36","detail":"draft -> approved (auto: all questions answered)"}
+{"at":"2026-11-02T08:54:28.496Z","actor":"user","action":"status","card":"S-36","detail":"approved -> queued"}
+{"at":"2026-11-02T08:54:46.310Z","actor":"claude","action":"comment","card":"S-36","detail":"Req 7 resolved by D-22: one Spill app process holds every project window, each window talking to its own project's board server, which the app starts and stops; `spill app` in a folder while Spill is open adds a window to the running app. Queued after S-33, S-34 and S-35."}
+{"at":"2026-11-02T08:55:24.294Z","actor":"claude","action":"comment","card":"S-33","detail":"Reqs 3, 5, 6 and 7 done. Note: the inbox action is \"update_request\" rather than \"update\", because \"update\" already names card edits in the event log."}
+{"at":"2026-11-02T08:57:03.488Z","actor":"claude","action":"comment","card":"S-33","detail":"Reqs 1-8 done"}
+{"at":"2026-11-02T08:57:03.497Z","actor":"claude","action":"checks","card":"S-33","detail":"5 of 5 passed"}
+{"at":"2026-11-02T08:57:03.504Z","actor":"claude","action":"status","card":"S-33","detail":"active -> done: Built and checked on a copy of the board; 44 tests pass."}
+{"at":"2026-11-02T08:57:19.115Z","actor":"claude","action":"status","card":"S-34","detail":"queued -> active: Starting with the Paper design (req 6)."}
+{"at":"2026-11-02T08:57:19.121Z","actor":"claude","action":"focus","card":"S-34","detail":"discussing S-34; next S-35, S-36: Designing S-34: versions and a diff view"}
+{"at":"2026-11-02T08:58:13.155Z","actor":"claude","action":"ask","card":"Q-22","detail":"Design approval: spec versions and diff (S-34)"}
+{"at":"2026-11-02T08:58:13.163Z","actor":"claude","action":"focus","card":"Q-22","detail":"discussing Q-22; next S-34, S-35, S-36: S-33 shipped; S-34 design waiting on your sign-off"}
+{"at":"2026-11-02T08:58:52.749Z","actor":"user","action":"record","card":"D-23","detail":"answers Q-22: A. Approve this design"}
+{"at":"2026-11-02T08:59:16.574Z","actor":"claude","action":"comment","card":"S-34","detail":"Design approved (D-23). Building now."}
+{"at":"2026-11-02T09:01:56.839Z","actor":"claude","action":"comment","card":"S-34","detail":"Reqs 1-6 done"}
+{"at":"2026-11-02T09:01:56.845Z","actor":"claude","action":"checks","card":"S-34","detail":"4 of 4 passed"}
+{"at":"2026-11-02T09:01:56.849Z","actor":"claude","action":"status","card":"S-34","detail":"active -> done: Built and checked on a copy of the board; 46 tests pass."}
+{"at":"2026-11-02T09:02:09.335Z","actor":"claude","action":"status","card":"S-35","detail":"queued -> active: Starting with a Paper design for the Files list, the branch link and the Replaced card."}
+{"at":"2026-11-02T09:02:09.343Z","actor":"claude","action":"focus","card":"S-35","detail":"discussing S-35; next S-36: Designing S-35: replace a spec"}
+{"at":"2026-11-02T09:04:05.016Z","actor":"claude","action":"ask","card":"Q-23","detail":"Approve the S-35 replace and branch design?"}
+{"at":"2026-11-02T09:04:09.399Z","actor":"claude","action":"focus","card":"Q-23","detail":"discussing Q-23, S-35; next S-36: S-35 design is ready in Paper for sign-off"}
+{"at":"2026-11-02T09:06:11.794Z","actor":"user","action":"record","card":"D-24","detail":"answers Q-23: A. Approve this design"}
+{"at":"2026-11-02T09:11:40.239Z","actor":"claude","action":"files","card":"S-35","detail":"changed src/board.ts, changed src/store.ts, changed src/tools.ts, changed src/mcp.ts, changed src/server.ts, changed ui/main.ts, changed ui/app.css, changed .spill/SPILL.md, changed test/spill.test.ts"}
+{"at":"2026-11-02T09:11:40.240Z","actor":"claude","action":"comment","card":"S-35","detail":"Reqs 1-7 done. Branch: spill_draft_spec follows (drawn next to the done spec, Follows pill). Files: spill_files, shown in a Code tab. Replace: spill_propose_replace asks a question naming the files; set replaced only after A, linked both ways, dimmed. A replacement answer no longer auto-approves the new spec. Also fixed a same-millisecond race in S-34's approved-version marking. 50 tests pass. Restart the Spill window to load the new server code."}
+{"at":"2026-11-02T09:11:40.241Z","actor":"claude","action":"checks","card":"S-35","detail":"4 of 4 passed"}
+{"at":"2026-11-02T09:11:40.242Z","actor":"claude","action":"status","card":"S-35","detail":"active -> done: Shipped; checks recorded."}
+{"at":"2026-11-02T09:11:53.556Z","actor":"claude","action":"status","card":"S-32","detail":"queued -> active: All three parts are done; closing the overview."}
+{"at":"2026-11-02T09:11:53.564Z","actor":"claude","action":"checks","card":"S-32","detail":"3 of 3 passed"}
+{"at":"2026-11-02T09:11:53.570Z","actor":"claude","action":"status","card":"S-32","detail":"active -> done: Done: S-33, S-34 and S-35 shipped. The overview text still says \"change\"; the built feature uses \"update\" per Q-20."}
+{"at":"2026-11-02T09:12:06.130Z","actor":"claude","action":"status","card":"S-36","detail":"queued -> active: Starting: reading the Tauri host and the app command."}
+{"at":"2026-11-02T09:17:54.601Z","actor":"claude","action":"files","card":"S-36","detail":"changed src-tauri/src/main.rs, changed src-tauri/capabilities/default.json, changed src/cli.ts, changed .spill/SPILL.md"}
+{"at":"2026-11-02T09:17:54.602Z","actor":"claude","action":"comment","card":"S-36","detail":"Reqs 1-7 done. One app process (D-22) starts a board server per window on a free port and stops it when the window closes. spill app hands its folder to the running app over ~/.spill/app.sock, or starts the app. Recents in ~/.spill/recent. File: Open Project... (folder picker via osascript, no new dependency), Open Recent (10, Clear Menu). Window: open projects, current one checked. View > Reload keeps Cmd+R. No new dependencies."}
+{"at":"2026-11-02T09:17:54.603Z","actor":"claude","action":"checks","card":"S-36","detail":"2 of 5 passed; Open Recent lists both projects, newest first failed"}
+{"at":"2026-11-02T09:18:03.073Z","actor":"claude","action":"ask","card":"Q-24","detail":"Check the S-36 menus in the two test windows"}
+{"at":"2026-11-02T09:18:08.633Z","actor":"claude","action":"focus","card":"Q-24","detail":"discussing Q-24, S-36: S-36 built; the native menus need a manual check"}
+{"at":"2026-11-02T09:28:19.279Z","actor":"user","action":"record","card":"D-25","detail":"answers Q-24: A. All of it works"}
+{"at":"2026-11-02T09:28:27.195Z","actor":"user","action":"comment","card":"S-36","detail":"Fix failing check: Open Recent lists both projects, newest first\nFix failing check: Window menu lists both and switches\nFix failing check: Closing a window removes it and stops its server"}
+{"at":"2026-11-02T09:28:33.939Z","actor":"claude","action":"checks","card":"S-36","detail":"5 of 5 passed"}
+{"at":"2026-11-02T09:28:33.944Z","actor":"claude","action":"status","card":"S-36","detail":"active -> done: Shipped; menus confirmed by you (D-25)."}
+{"at":"2026-11-02T09:28:33.950Z","actor":"claude","action":"focus","card":"-","detail":"cleared"}
+{"at":"2026-11-02T09:28:50.250Z","actor":"claude","action":"comment","card":"S-36","detail":"These three checks failed only because I couldn't see the native menus. Your answer to Q-24 (D-25) confirmed all of them, so they are recorded as passing and there is nothing to fix. If something in the menus is actually wrong, say what."}

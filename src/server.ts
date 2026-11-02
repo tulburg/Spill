@@ -47,7 +47,7 @@ export async function startServer(store: Store, port = 4747) {
       "/": () => new Response(Bun.file(join(UI_DIR, "index.html"))),
       "/app.css": () => new Response(Bun.file(join(UI_DIR, "app.css"))),
       "/app.js": async () => new Response(await bundle(), { headers: { "content-type": "text/javascript" } }),
-      "/api/board": () => json({ project: store.config().project, cards: store.all(), focus: store.focus(), checks: store.checks(), rejections: new Board(store, "user").rejections().map((r) => ({ id: r.card.id, reason: r.reason, at: r.at })), events: store.events().slice(-200), messages: store.events().filter((e) => e.card === "-" && (e.action === "message" || e.action === "reply")), messageState: store.messageState(), root: dirname(store.dir) }),
+      "/api/board": () => json({ project: store.config().project, cards: store.all(), focus: store.focus(), checks: store.checks(), files: store.files(), rejections: new Board(store, "user").rejections().map((r) => ({ id: r.card.id, reason: r.reason, at: r.at })), events: store.events().slice(-200), versions: Object.fromEntries(store.all().filter((c) => c.kind === "spec" && store.versions(c.id).length).map((c) => [c.id, new Board(store, "user").versions(c)])), messages: store.events().filter((e) => e.card === "-" && (e.action === "message" || e.action === "reply")), messageState: store.messageState(), root: dirname(store.dir) }),
       "/api/stream": () => {
         let ctl: ReadableStreamDefaultController;
         return new Response(
@@ -127,6 +127,10 @@ export async function startServer(store: Store, port = 4747) {
       "/api/cards/:id/answer": {
         POST: (req) =>
           act(req, (b) => user().answer({ id: req.params.id, picks: Array.isArray(b.picks) ? b.picks.map(String) : undefined, text: b.text })),
+      },
+      // S-33: ask for an update to a done spec.
+      "/api/cards/:id/update": {
+        POST: (req) => act(req, (b) => user().requestUpdate({ id: req.params.id, text: b.text })),
       },
       "/api/cards/:id/comment": {
         POST: (req) => act(req, (b) => user().comment({ id: req.params.id, text: b.text })),
