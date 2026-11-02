@@ -633,7 +633,7 @@ button.fix:disabled { border-color: var(--border); color: var(--faint); cursor: 
 .changed .qid { padding: 0; border: 0; background: none; font: inherit; font-family: "Geist Mono", monospace; color: var(--text); text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
 
 /* S-31: counts row at the top of the bottom-left panel; collapsed, it is the whole panel. */
-.strip .counts { display: flex; align-items: center; gap: 8px; padding-bottom: 12px; border-bottom: 1px solid var(--inset); }
+.strip .counts { display: flex; align-items: center; gap: 8px; padding: 0 0 12px; border-left: 0; border-bottom: 1px solid var(--inset); }
 .strip.collapsed { padding: 10px 12px; }
 .strip.collapsed .counts { padding-bottom: 0; border-bottom: 0; cursor: pointer; }
 .strip .chips { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; flex: 1; min-width: 0; }
