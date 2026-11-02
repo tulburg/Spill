@@ -2325,6 +2325,8 @@ function messageDrop(): HTMLElement | null {
 let live = false;
 
 function render() {
+  // S-36: with a window per project, the title names the project.
+  document.title = data.project ? `Spill: ${data.project}` : "Spill";
   const app = document.getElementById("app")!;
   const prev = document.getElementById("canvas");
   const scroll = prev ? { left: prev.scrollLeft, top: prev.scrollTop } : null;

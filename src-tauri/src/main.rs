@@ -170,7 +170,7 @@ fn open_project(app: &AppHandle, dir: &Path, port: Option<u16>) {
         }
         let url = format!("http://localhost:{port}").parse().expect("board url");
         let window = WebviewWindowBuilder::new(&app, &label, WebviewUrl::External(url))
-            .title(&name)
+            .title(format!("Spill: {name}"))
             .inner_size(1440.0, 960.0)
             .min_inner_size(900.0, 600.0);
         // The page's header doubles as the title bar; the traffic lights float over its left edge.

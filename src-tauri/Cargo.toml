@@ -3,6 +3,11 @@ name = "spill-app"
 version = "0.1.0"
 edition = "2021"
 
+# An unbundled macOS app takes its menu bar and Dock name from the executable.
+[[bin]]
+name = "Spill"
+path = "src/main.rs"
+
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 

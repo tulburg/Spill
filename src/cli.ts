@@ -47,7 +47,7 @@ async function openApp(store: Store, port?: number): Promise<void> {
     s.on("error", () => done(false));
   });
   if (handed) return console.log(`Opened ${name} in the running Spill app`);
-  const built = join(TAURI_DIR, "target", "debug", "spill-app");
+  const built = join(TAURI_DIR, "target", "debug", "Spill");
   const cmd = existsSync(built) ? [built] : ["cargo", "run", "--quiet", "--manifest-path", join(TAURI_DIR, "Cargo.toml")];
   const env = { ...process.env, SPILL_OPEN: root, SPILL_BUN: process.execPath, SPILL_CLI: join(import.meta.dir, "cli.ts"), ...(port ? { SPILL_PORT: String(port) } : {}) };
   console.log(`Opening ${name} in Spill`);
