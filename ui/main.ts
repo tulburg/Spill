@@ -631,7 +631,8 @@ function countsRow(): HTMLElement {
     pendingSpecs().length ? chip("pend", CHIP.pending, pendingSpecs().length, "Pending approval") : null,
     queuedSpecs().length ? chip("queued", CHIP.queued, queuedSpecs().length, "Up next: queued to build") : null,
     builtSpecs().length ? chip("built", CHIP.built, builtSpecs().length, "Built") : null,
-    decisionCards().length ? chip("dec", CHIP.decision, decisionCards().length, "Decisions") : null,
+    // Collapsed, the row shows only what needs attention; decisions stay in the open panel.
+    !panelCollapsed && decisionCards().length ? chip("dec", CHIP.decision, decisionCards().length, "Decisions") : null,
   ];
   return h(
     "div",

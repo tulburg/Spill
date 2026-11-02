@@ -701,3 +701,9 @@ button.fix:disabled { border-color: var(--border); color: var(--faint); cursor: 
 .codefiles .frow.new .c { color: #15803d; }
 .codefiles .frow.removed .p { color: #a1a1aa; text-decoration: line-through; }
 .codefiles .frow.removed .c { color: #b91c1c; }
+
+/* The card open in the sheet reads at full strength, whatever its status fades it to. */
+.card.selected.s-done, .card.selected.s-rejected, .card.spec.selected.s-replaced { background: #fff; border-color: var(--border); opacity: 1; }
+.card.selected.s-done .title, .card.selected.s-rejected .title, .card.spec.selected.s-replaced .title { color: var(--text); }
+.card.selected.s-done .why, .card.selected.s-rejected .why, .card.spec.selected.s-replaced .why { color: var(--muted); }
+.card.selected.s-done .id, .card.selected.s-rejected .id, .card.spec.selected.s-replaced .id { color: var(--muted); }
