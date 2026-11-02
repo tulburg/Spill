@@ -46,6 +46,7 @@ export async function startServer(store: Store, port = 4747) {
     routes: {
       "/": () => new Response(Bun.file(join(UI_DIR, "index.html"))),
       "/app.css": () => new Response(Bun.file(join(UI_DIR, "app.css"))),
+      "/logo.svg": () => new Response(Bun.file(join(UI_DIR, "logo.svg")), { headers: { "content-type": "image/svg+xml" } }),
       "/app.js": async () => new Response(await bundle(), { headers: { "content-type": "text/javascript" } }),
       "/api/board": () => json({ project: store.config().project, cards: store.all(), focus: store.focus(), checks: store.checks(), files: store.files(), rejections: new Board(store, "user").rejections().map((r) => ({ id: r.card.id, reason: r.reason, at: r.at })), events: store.events().slice(-200), versions: Object.fromEntries(store.all().filter((c) => c.kind === "spec" && store.versions(c.id).length).map((c) => [c.id, new Board(store, "user").versions(c)])), messages: store.events().filter((e) => e.card === "-" && (e.action === "message" || e.action === "reply")), messageState: store.messageState(), root: dirname(store.dir) }),
       "/api/stream": () => {

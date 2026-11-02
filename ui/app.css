@@ -109,7 +109,7 @@ body {
 .strip .item.build.held { border-color: #f59e0b; }
 .strip .item.build.held .why { font-size: 12px; color: var(--amber-text); }
 
-.logo { width: 26px; height: 26px; border-radius: 7px; background: var(--text); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 14px; }
+.logo { width: 26px; height: 26px; display: block; flex-shrink: 0; }
 .project { font-weight: 600; font-size: 14px; }
 .live { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
 .live i { width: 6px; height: 6px; border-radius: 3px; background: var(--green-strong); }
@@ -545,7 +545,7 @@ button.fix:disabled { border-color: var(--border); color: var(--faint); cursor: 
 .topbar.s7 { width: 600px; max-width: calc(100vw - 32px); height: auto; gap: 4px; padding: 4px; border-radius: 14px; box-shadow: 0 8px 24px rgba(24, 24, 27, 0.08); }
 .pm-btn { display: flex; align-items: center; gap: 8px; flex-shrink: 0; padding: 4px 8px 4px 4px; border: 0; border-radius: 10px; background: none; font: inherit; color: var(--text); cursor: pointer; }
 .pm-btn:hover, .pm-btn.on { background: var(--inset); }
-.pm-btn .logo { width: 24px; height: 24px; border-radius: 6px; font-size: 12px; font-weight: 700; }
+.pm-btn .logo { width: 24px; height: 24px; }
 .tb-sep { width: 1px; height: 20px; background: var(--border); flex-shrink: 0; }
 .s-field { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; padding: 6px 8px 6px 12px; border-radius: 10px; background: var(--inset); color: var(--muted); cursor: text; }
 .s-field .ph { flex: 1; min-width: 0; font-size: 14px; line-height: 20px; color: var(--faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -590,7 +590,7 @@ button.fix:disabled { border-color: var(--border); color: var(--faint); cursor: 
 .chrome { align-items: flex-start; padding-top: 8px; }
 .topbar.s7 { width: 440px; padding: 3px; gap: 3px; border-radius: 12px; }
 .pm-btn { gap: 6px; padding: 3px 6px 3px 3px; border-radius: 9px; }
-.pm-btn .logo { width: 22px; height: 22px; font-size: 11px; }
+.pm-btn .logo { width: 22px; height: 22px; }
 .pm-btn .project { font-size: 13px; }
 .s-field { gap: 6px; padding: 4px 6px 4px 10px; border-radius: 9px; }
 .s-field .ph { font-size: 13px; line-height: 18px; }
@@ -702,8 +702,8 @@ button.fix:disabled { border-color: var(--border); color: var(--faint); cursor: 
 .codefiles .frow.removed .p { color: #a1a1aa; text-decoration: line-through; }
 .codefiles .frow.removed .c { color: #b91c1c; }
 
-/* The card open in the sheet reads at full strength, whatever its status fades it to. */
-.card.selected.s-done, .card.selected.s-rejected, .card.spec.selected.s-replaced { background: #fff; border-color: var(--border); opacity: 1; }
-.card.selected.s-done .title, .card.selected.s-rejected .title, .card.spec.selected.s-replaced .title { color: var(--text); }
-.card.selected.s-done .why, .card.selected.s-rejected .why, .card.spec.selected.s-replaced .why { color: var(--muted); }
-.card.selected.s-done .id, .card.selected.s-rejected .id, .card.spec.selected.s-replaced .id { color: var(--muted); }
+/* The card open in the sheet, or under the pointer, reads at full strength, whatever its status fades it to. */
+.card.selected.s-done, .card.s-done:hover, .card.selected.s-rejected, .card.s-rejected:hover, .card.spec.selected.s-replaced, .card.spec.s-replaced:hover { background: #fff; border-color: var(--border); opacity: 1; }
+.card.selected.s-done .title, .card.s-done:hover .title, .card.selected.s-rejected .title, .card.s-rejected:hover .title, .card.spec.selected.s-replaced .title, .card.spec.s-replaced:hover .title { color: var(--text); }
+.card.selected.s-done .why, .card.s-done:hover .why, .card.selected.s-rejected .why, .card.s-rejected:hover .why, .card.spec.selected.s-replaced .why, .card.spec.s-replaced:hover .why { color: var(--muted); }
+.card.selected.s-done .id, .card.s-done:hover .id, .card.selected.s-rejected .id, .card.s-rejected:hover .id, .card.spec.selected.s-replaced .id, .card.spec.s-replaced:hover .id { color: var(--muted); }

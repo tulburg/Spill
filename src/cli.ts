@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-import { existsSync, readFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { createConnection } from "node:net";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
@@ -35,6 +35,24 @@ async function serveBoard(store: Store, port: number): Promise<void> {
   console.log(`Spill board for ${store.config().project || store.dir} at http://localhost:${server.port}`);
 }
 
+// macOS shows an app's icon (Dock, app switcher) only for a bundle, so run the built binary from a
+// minimal Spill.app beside it, refreshed whenever the binary or the icon changes.
+function appBundle(built: string): string {
+  const app = join(dirname(built), "Spill.app", "Contents");
+  const exe = join(app, "MacOS", "Spill");
+  const icon = join(TAURI_DIR, "icons", "icon.icns");
+  const stale = (src: string, dst: string) => !existsSync(dst) || statSync(src).mtimeMs > statSync(dst).mtimeMs;
+  if (!stale(built, exe) && !stale(icon, join(app, "Resources", "icon.icns"))) return exe;
+  mkdirSync(join(app, "MacOS"), { recursive: true });
+  mkdirSync(join(app, "Resources"), { recursive: true });
+  copyFileSync(built, exe);
+  copyFileSync(icon, join(app, "Resources", "icon.icns"));
+  const keys: Record<string, string> = { CFBundleExecutable: "Spill", CFBundleIdentifier: "dev.spill.app", CFBundleName: "Spill", CFBundleDisplayName: "Spill", CFBundleIconFile: "icon", CFBundlePackageType: "APPL", NSHighResolutionCapable: "true" };
+  const body = Object.entries(keys).map(([k, v]) => (v === "true" ? `  <key>${k}</key><true/>` : `  <key>${k}</key><string>${v}</string>`)).join("\n");
+  writeFileSync(join(app, "Info.plist"), `<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">\n<plist version="1.0">\n<dict>\n${body}\n</dict>\n</plist>\n`);
+  return exe;
+}
+
 // S-36 (D-22): one Spill app holds every project window and serves each board itself. Hand this
 // project to the running app, or start the app with it; the app picks a free port unless one is given.
 async function openApp(store: Store, port?: number): Promise<void> {
@@ -48,7 +66,7 @@ async function openApp(store: Store, port?: number): Promise<void> {
   });
   if (handed) return console.log(`Opened ${name} in the running Spill app`);
   const built = join(TAURI_DIR, "target", "debug", "Spill");
-  const cmd = existsSync(built) ? [built] : ["cargo", "run", "--quiet", "--manifest-path", join(TAURI_DIR, "Cargo.toml")];
+  const cmd = existsSync(built) ? [appBundle(built)] : ["cargo", "run", "--quiet", "--manifest-path", join(TAURI_DIR, "Cargo.toml")];
   const env = { ...process.env, SPILL_OPEN: root, SPILL_BUN: process.execPath, SPILL_CLI: join(import.meta.dir, "cli.ts"), ...(port ? { SPILL_PORT: String(port) } : {}) };
   console.log(`Opening ${name} in Spill`);
   const child = Bun.spawn(cmd, { env, stdout: "inherit", stderr: "inherit" });

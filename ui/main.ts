@@ -1999,7 +1999,7 @@ function toolbar(needs: number): HTMLElement {
     h(
       "button",
       { class: `pm-btn${menuOpen ? " on" : ""}`, onclick: () => ((menuOpen = !menuOpen), (searchOpen = false), (menuSections = false), render()) },
-      h("div", { class: "logo" }, "S"),
+      h("img", { class: "logo", src: "/logo.svg", alt: "Spill" }),
       h("span", { class: "project" }, data.project || "Spill"),
       svg(`<svg width="12" height="12" viewBox="0 0 12 12"><path d="${menuOpen ? "M3 7.5l3-3 3 3" : "M3 4.5l3 3 3-3"}" fill="none" stroke="#71717A" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>`),
     ),
