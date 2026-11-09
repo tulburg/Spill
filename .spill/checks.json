@@ -621,5 +621,109 @@
         "detail": "Confirmed by the user (D-25)"
       }
     ]
+  },
+  "S-38": {
+    "at": "2026-11-03T07:30:40.914Z",
+    "running": false,
+    "results": [
+      {
+        "name": "1. No hex outside tokens",
+        "pass": true,
+        "note": "grep of ui/ finds hex only in the three token blocks, plus #000 inside a mask-image"
+      },
+      {
+        "name": "2. Light unchanged",
+        "pass": true,
+        "note": "Light screenshots diffed against the pre-change baseline: question and decision identical; others differ only in the live timer and FAB animation"
+      },
+      {
+        "name": "3. Dark readable",
+        "pass": true,
+        "note": "Canvas, building, queued, discussing, rejected, done cards, open and answered questions, decisions, summary panel and thread all readable and distinct"
+      },
+      {
+        "name": "4. Live switch and system",
+        "pass": true,
+        "note": "Setting data-theme switches live; with it removed, prefers-color-scheme decides"
+      }
+    ]
+  },
+  "S-39": {
+    "at": "2026-11-03T07:34:57.038Z",
+    "running": false,
+    "results": [
+      {
+        "name": "1. Cmd+, and project menu open General; Esc closes",
+        "pass": true,
+        "note": "Driven in headless Chrome on a scratch board: both open on General, Esc closes. App menu item builds (cargo build) but was not clicked in the running app"
+      },
+      {
+        "name": "2. General details correct",
+        "pass": true,
+        "note": "Project name, folder, 39 specs / 28 questions / 28 decisions, Claude last seen, version 0.1.0 match the scratch board and package.json"
+      },
+      {
+        "name": "3. Dark, Light, System switch at once; System follows OS",
+        "pass": true,
+        "note": "Body background flips to #111113 / #f6f6f4 immediately; with System, emulated OS dark gives dark"
+      },
+      {
+        "name": "4. Survives reload and reaches a second window",
+        "pass": true,
+        "note": "Second board server (same HOME) went dark within 3.5s; reload kept Dark. Scratch HOME used, your ~/.spill untouched"
+      }
+    ]
+  },
+  "S-40": {
+    "at": "2026-11-03T07:46:32.114Z",
+    "running": false,
+    "results": [
+      {
+        "name": "1. Live work and open questions stay full with a spotlight",
+        "pass": true,
+        "note": "Active, queued and discussing specs at opacity 1 on the scratch board (decisions now fade by design)"
+      },
+      {
+        "name": "2. Finished cards and decisions fade, full on selection",
+        "pass": true,
+        "note": "Done, answered, dropped, rejected cards and decisions at 0.45 under the spotlight, muted colors; opened card returns to full"
+      },
+      {
+        "name": "3. Chosen answer muted, ring kept",
+        "pass": true,
+        "note": "Q-13 screenshot: answer text muted, green ring and label kept"
+      },
+      {
+        "name": "4. Docs match CSS",
+        "pass": true,
+        "note": "SPILL.md step 7 and the CSS block comment list the same rules"
+      }
+    ]
+  },
+  "S-41": {
+    "at": "2026-11-09T13:14:03.165Z",
+    "running": false,
+    "results": [
+      {
+        "name": "1. Three-line box with Reject below",
+        "pass": true,
+        "note": "Scratch board: textarea rows 3 (74px), Reject right-aligned below, disabled while empty"
+      },
+      {
+        "name": "2. Grows, then scrolls past 200px",
+        "pass": true,
+        "note": "Grew to 134px with text, capped at 200px and scrolls with a long reason"
+      },
+      {
+        "name": "3. Enter new line, Cmd+Enter rejects, Esc cancels",
+        "pass": true,
+        "note": "Enter added a line without sending; Cmd+Enter rejected S-40 on the scratch board. Esc re-renders the action row (same code path as before)"
+      },
+      {
+        "name": "4. Line breaks kept",
+        "pass": true,
+        "note": "The stored rejection reason came back with all 3 lines from /api/board rejections, which spill_rejections also reads"
+      }
+    ]
   }
 }

@@ -150,6 +150,11 @@ The `spill` MCP server exposes these tools (all take the project from the workin
    The button shows the message as received, then working once you have read it, until you reply or change the board.
 7. **Keep the spotlight current.** Whenever the conversation moves to a card, call `spill_focus`
    with what is being discussed and what comes next, so the user sees it in the app.
+   Fading rules (S-40): finished cards (done, answered, rejected, replaced, dropped, and decisions)
+   always look muted, including an answered question's chosen answer (its green ring marks it).
+   While a spotlight is set, finished cards and drafts outside it also fade; active, approved,
+   queued, discussing specs and open questions never fade. Hovering or opening
+   any card shows it at full strength.
 8. **Rejections.** Revise the spec and move it to `discussing`, or, if it is superseded, draft the
    replacement and `spill_rejections resolve` it with a note saying why.
    A rejected draft whose reason says what the user wants usually means "redraft": rewrite the

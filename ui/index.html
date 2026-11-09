@@ -8,6 +8,8 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap" />
     <link rel="stylesheet" href="/app.css" />
+    <!-- S-39: apply the last theme before first paint; the server's shared setting follows. -->
+    <script>try { var t = localStorage.getItem("spill.theme"); if (t === "light" || t === "dark") document.documentElement.dataset.theme = t; } catch (e) {}</script>
   </head>
   <body>
     <div id="app"></div>

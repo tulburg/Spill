@@ -51,21 +51,21 @@ function svg(markup: string): SVGElement {
 }
 
 const ICON = {
-  approved: `<svg width="16" height="16" viewBox="0 0 14 14"><circle cx="7" cy="7" r="6.5" fill="#16A34A"/><path d="M4.3 7.2l1.8 1.8 3.6-3.8" fill="none" stroke="#fff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
-  active: `<svg width="16" height="16" viewBox="0 0 14 14"><circle cx="7" cy="7" r="6" fill="none" stroke="#18181B" stroke-width="1.5"/><path d="M7 2.5a4.5 4.5 0 0 1 0 9z" fill="#18181B"/></svg>`,
-  draft: `<svg width="16" height="16" viewBox="0 0 14 14"><circle cx="7" cy="7" r="6" fill="none" stroke="#A1A1AA" stroke-width="1.4" stroke-dasharray="2.2 2"/></svg>`,
-  discussing: `<svg width="16" height="16" viewBox="0 0 14 14"><circle cx="7" cy="7" r="6" fill="none" stroke="#D97706" stroke-width="1.4"/><path d="M7 7V1a6 6 0 0 1 6 6z" fill="#D97706"/></svg>`,
-  rejected: `<svg width="16" height="16" viewBox="0 0 14 14"><circle cx="7" cy="7" r="6" fill="none" stroke="#A1A1AA" stroke-width="1.4"/><path d="M4.8 4.8l4.4 4.4M9.2 4.8l-4.4 4.4" stroke="#A1A1AA" stroke-width="1.4" stroke-linecap="round"/></svg>`,
-  replaced: `<svg width="16" height="16" viewBox="0 0 14 14"><circle cx="7" cy="7" r="6" fill="none" stroke="#A1A1AA" stroke-width="1.4"/><path d="M4 7h6" stroke="#A1A1AA" stroke-width="1.4" stroke-linecap="round"/></svg>`,
-  done: `<svg width="16" height="16" viewBox="0 0 14 14"><circle cx="7" cy="7" r="6.5" fill="#A1A1AA"/><path d="M4.3 7.2l1.8 1.8 3.6-3.8" fill="none" stroke="#FAFAFA" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
-  question: `<svg width="16" height="16" viewBox="0 0 14 14"><circle cx="7" cy="7" r="6" fill="none" stroke="#D97706" stroke-width="1.4"/><path d="M5.4 5.4a1.7 1.7 0 1 1 2.3 1.6c-.5.2-.7.5-.7 1v.3" fill="none" stroke="#D97706" stroke-width="1.3" stroke-linecap="round"/><circle cx="7" cy="10.2" r=".8" fill="#D97706"/></svg>`,
-  questionDone: `<svg width="16" height="16" viewBox="0 0 14 14"><circle cx="7" cy="7" r="6" fill="none" stroke="#A1A1AA" stroke-width="1.4"/><path d="M4.5 7.2l1.7 1.7 3.3-3.4" fill="none" stroke="#A1A1AA" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
-  seal: `<svg width="14" height="14" viewBox="0 0 14 14"><path d="M7 1l1.6 1.3 2-.2.6 2 1.7 1.1-.7 1.9.7 1.9-1.7 1.1-.6 2-2-.2L7 13l-1.6-1.3-2 .2-.6-2-1.7-1.1.7-1.9-.7-1.9 1.7-1.1.6-2 2 .2z" fill="#0D9488"/><path d="M4.6 7.1l1.6 1.6 3.2-3.3" fill="none" stroke="#FFF" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+  approved: `<svg width="16" height="16" viewBox="0 0 14 14"><circle cx="7" cy="7" r="6.5" fill="var(--green-strong)"/><path d="M4.3 7.2l1.8 1.8 3.6-3.8" fill="none" stroke="var(--on-color)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+  active: `<svg width="16" height="16" viewBox="0 0 14 14"><circle cx="7" cy="7" r="6" fill="none" stroke="var(--text)" stroke-width="1.5"/><path d="M7 2.5a4.5 4.5 0 0 1 0 9z" fill="var(--text)"/></svg>`,
+  draft: `<svg width="16" height="16" viewBox="0 0 14 14"><circle cx="7" cy="7" r="6" fill="none" stroke="var(--faint)" stroke-width="1.4" stroke-dasharray="2.2 2"/></svg>`,
+  discussing: `<svg width="16" height="16" viewBox="0 0 14 14"><circle cx="7" cy="7" r="6" fill="none" stroke="var(--amber-strong)" stroke-width="1.4"/><path d="M7 7V1a6 6 0 0 1 6 6z" fill="var(--amber-strong)"/></svg>`,
+  rejected: `<svg width="16" height="16" viewBox="0 0 14 14"><circle cx="7" cy="7" r="6" fill="none" stroke="var(--faint)" stroke-width="1.4"/><path d="M4.8 4.8l4.4 4.4M9.2 4.8l-4.4 4.4" stroke="var(--faint)" stroke-width="1.4" stroke-linecap="round"/></svg>`,
+  replaced: `<svg width="16" height="16" viewBox="0 0 14 14"><circle cx="7" cy="7" r="6" fill="none" stroke="var(--faint)" stroke-width="1.4"/><path d="M4 7h6" stroke="var(--faint)" stroke-width="1.4" stroke-linecap="round"/></svg>`,
+  done: `<svg width="16" height="16" viewBox="0 0 14 14"><circle cx="7" cy="7" r="6.5" fill="var(--faint)"/><path d="M4.3 7.2l1.8 1.8 3.6-3.8" fill="none" stroke="var(--done-bg)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+  question: `<svg width="16" height="16" viewBox="0 0 14 14"><circle cx="7" cy="7" r="6" fill="none" stroke="var(--amber-strong)" stroke-width="1.4"/><path d="M5.4 5.4a1.7 1.7 0 1 1 2.3 1.6c-.5.2-.7.5-.7 1v.3" fill="none" stroke="var(--amber-strong)" stroke-width="1.3" stroke-linecap="round"/><circle cx="7" cy="10.2" r=".8" fill="var(--amber-strong)"/></svg>`,
+  questionDone: `<svg width="16" height="16" viewBox="0 0 14 14"><circle cx="7" cy="7" r="6" fill="none" stroke="var(--faint)" stroke-width="1.4"/><path d="M4.5 7.2l1.7 1.7 3.3-3.4" fill="none" stroke="var(--faint)" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+  seal: `<svg width="14" height="14" viewBox="0 0 14 14"><path d="M7 1l1.6 1.3 2-.2.6 2 1.7 1.1-.7 1.9.7 1.9-1.7 1.1-.6 2-2-.2L7 13l-1.6-1.3-2 .2-.6-2-1.7-1.1.7-1.9-.7-1.9 1.7-1.1.6-2 2 .2z" fill="var(--teal)"/><path d="M4.6 7.1l1.6 1.6 3.2-3.3" fill="none" stroke="var(--on-color)" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
   lock: `<svg width="12" height="12" viewBox="0 0 12 12"><rect x="2.5" y="5" width="7" height="5" rx="1.2" fill="none" stroke="currentColor" stroke-width="1.2"/><path d="M4 5V3.8a2 2 0 0 1 4 0V5" fill="none" stroke="currentColor" stroke-width="1.2"/></svg>`,
   chev: `<svg class="chev" width="10" height="10" viewBox="0 0 10 10"><path d="M2 3.5l3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
 };
 
-const SECTION_COLORS = ["#8B5CF6", "#3B82F6", "#F97316", "#14B8A6", "#EC4899", "#84CC16"];
+const SECTION_COLORS = [1, 2, 3, 4, 5, 6].map((n) => `var(--sec-${n})`);
 const SPEC_STATUS_LABEL: Record<string, string> = {
   draft: "Draft",
   discussing: "Needs your approval",
@@ -178,7 +178,7 @@ function phase(ms: number): string {
   return `animation-delay:-${(Date.now() % ms) / 1000}s`;
 }
 
-const SPINNER = `<svg class="spin" width="12" height="12" viewBox="0 0 12 12"><circle cx="6" cy="6" r="4.5" fill="none" stroke="#E4E4E7" stroke-width="2"/><path d="M6 1.5a4.5 4.5 0 0 1 4.5 4.5" fill="none" stroke="#18181B" stroke-width="2" stroke-linecap="round"/></svg>`;
+const SPINNER = `<svg class="spin" width="12" height="12" viewBox="0 0 12 12"><circle cx="6" cy="6" r="4.5" fill="none" stroke="var(--border)" stroke-width="2"/><path d="M6 1.5a4.5 4.5 0 0 1 4.5 4.5" fill="none" stroke="var(--text)" stroke-width="2" stroke-linecap="round"/></svg>`;
 
 function progressBar(c: Card, compact = false): HTMLElement | null {
   const p = progress(c);
@@ -597,15 +597,15 @@ function decisionsGroup(): HTMLElement | null {
 }
 
 const CHIP = {
-  rejected: `<svg width="12" height="12" viewBox="0 0 12 12"><circle cx="6" cy="6" r="5" fill="none" stroke="#B91C1C" stroke-width="1.4"/><path d="M4.2 4.2l3.6 3.6M7.8 4.2l-3.6 3.6" stroke="#B91C1C" stroke-width="1.4" stroke-linecap="round"/></svg>`,
-  held: `<svg width="12" height="12" viewBox="0 0 12 12"><circle cx="6" cy="6" r="4.6" fill="none" stroke="#F59E0B" stroke-width="1.6"/><path d="M4.6 4v4M7.4 4v4" stroke="#B45309" stroke-width="1.4" stroke-linecap="round"/></svg>`,
-  quiet: `<svg width="12" height="12" viewBox="0 0 12 12"><circle cx="6" cy="6" r="4.6" fill="none" stroke="#A1A1AA" stroke-width="1.6" stroke-dasharray="1.8 1.6"/></svg>`,
-  spot: `<svg width="12" height="12" viewBox="0 0 12 12"><circle cx="6" cy="6" r="4.5" fill="none" stroke="#6366F1" stroke-width="1.4"/><circle cx="6" cy="6" r="2" fill="#6366F1"/></svg>`,
-  question: `<svg width="12" height="12" viewBox="0 0 12 12"><circle cx="6" cy="6" r="5" fill="#F59E0B"/><path d="M4.6 4.7a1.5 1.5 0 1 1 2 1.4c-.4.2-.6.5-.6.9" fill="none" stroke="#fff" stroke-width="1.2" stroke-linecap="round"/><circle cx="6" cy="8.7" r=".7" fill="#fff"/></svg>`,
-  pending: `<svg width="12" height="12" viewBox="0 0 12 12"><circle cx="6" cy="6" r="4.5" fill="none" stroke="#B45309" stroke-width="1.4" stroke-dasharray="2 1.6"/></svg>`,
-  queued: `<svg width="12" height="12" viewBox="0 0 12 12"><path d="M3 2.5l4 3.5-4 3.5M7 2.5l3 3.5-3 3.5" fill="none" stroke="#3F3F46" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
-  built: `<svg width="12" height="12" viewBox="0 0 12 12"><circle cx="6" cy="6" r="5" fill="#16A34A"/><path d="M3.8 6.2l1.5 1.5 3-3.2" fill="none" stroke="#fff" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
-  decision: `<svg width="12" height="12" viewBox="0 0 12 12"><rect x="2.2" y="2.2" width="7.6" height="7.6" rx="1.5" transform="rotate(45 6 6)" fill="none" stroke="#0F766E" stroke-width="1.4"/></svg>`,
+  rejected: `<svg width="12" height="12" viewBox="0 0 12 12"><circle cx="6" cy="6" r="5" fill="none" stroke="var(--red-text)" stroke-width="1.4"/><path d="M4.2 4.2l3.6 3.6M7.8 4.2l-3.6 3.6" stroke="var(--red-text)" stroke-width="1.4" stroke-linecap="round"/></svg>`,
+  held: `<svg width="12" height="12" viewBox="0 0 12 12"><circle cx="6" cy="6" r="4.6" fill="none" stroke="var(--amber)" stroke-width="1.6"/><path d="M4.6 4v4M7.4 4v4" stroke="var(--amber-text)" stroke-width="1.4" stroke-linecap="round"/></svg>`,
+  quiet: `<svg width="12" height="12" viewBox="0 0 12 12"><circle cx="6" cy="6" r="4.6" fill="none" stroke="var(--faint)" stroke-width="1.6" stroke-dasharray="1.8 1.6"/></svg>`,
+  spot: `<svg width="12" height="12" viewBox="0 0 12 12"><circle cx="6" cy="6" r="4.5" fill="none" stroke="var(--indigo)" stroke-width="1.4"/><circle cx="6" cy="6" r="2" fill="var(--indigo)"/></svg>`,
+  question: `<svg width="12" height="12" viewBox="0 0 12 12"><circle cx="6" cy="6" r="5" fill="var(--amber)"/><path d="M4.6 4.7a1.5 1.5 0 1 1 2 1.4c-.4.2-.6.5-.6.9" fill="none" stroke="var(--on-color)" stroke-width="1.2" stroke-linecap="round"/><circle cx="6" cy="8.7" r=".7" fill="var(--on-color)"/></svg>`,
+  pending: `<svg width="12" height="12" viewBox="0 0 12 12"><circle cx="6" cy="6" r="4.5" fill="none" stroke="var(--amber-text)" stroke-width="1.4" stroke-dasharray="2 1.6"/></svg>`,
+  queued: `<svg width="12" height="12" viewBox="0 0 12 12"><path d="M3 2.5l4 3.5-4 3.5M7 2.5l3 3.5-3 3.5" fill="none" stroke="var(--text-2)" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+  built: `<svg width="12" height="12" viewBox="0 0 12 12"><circle cx="6" cy="6" r="5" fill="var(--green-strong)"/><path d="M3.8 6.2l1.5 1.5 3-3.2" fill="none" stroke="var(--on-color)" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+  decision: `<svg width="12" height="12" viewBox="0 0 12 12"><rect x="2.2" y="2.2" width="7.6" height="7.6" rx="1.5" transform="rotate(45 6 6)" fill="none" stroke="var(--teal-text)" stroke-width="1.4"/></svg>`,
 };
 
 // S-31: one chip per group with something in it, at the top of the panel; collapsed, it is the whole panel.
@@ -649,7 +649,7 @@ function checkRow(c: Card): HTMLElement | null {
   const run = data.checks?.[c.id];
   if (c.kind !== "spec" || (!hasChecks(c) && !run)) return null;
   const open = () => openSheet(c.id, false, "checks");
-  if (!run) return h("div", { class: "checks" }, h("i", { class: "dot", style: "background:#D4D4D8" }), "No checks run");
+  if (!run) return h("div", { class: "checks" }, h("i", { class: "dot", style: "background:var(--line)" }), "No checks run");
   if (run.running) return h("div", { class: "checks run", onclick: open }, h("i", { class: "dot running" }), "Running checks", h("span", { class: "sp" }), h("span", {}, ago(run.at)));
   const failed = run.results.filter((r) => !r.pass);
   return h(
@@ -808,22 +808,35 @@ function specActions(c: Card, draft?: () => string): HTMLElement | null {
       }
       return;
     }
-    const input = h("input", { placeholder: "Why reject it?" }) as HTMLInputElement;
-    const confirm = h("button", { class: "btn danger", style: "flex:0 0 auto;padding:0 12px" }, "Reject") as HTMLButtonElement;
+    // S-41: a three-line box that grows as you type, with Reject below it.
+    const input = h("textarea", { placeholder: "Why reject it?", rows: "3" }) as HTMLTextAreaElement;
+    const confirm = h("button", { class: "btn danger", disabled: "" }, "Reject") as HTMLButtonElement;
     const send = async () => {
+      if (!input.value.trim()) return;
       confirm.disabled = true;
-      const e = await post(`/api/cards/${c.id}/reject`, { reason: input.value });
+      const e = await post(`/api/cards/${c.id}/reject`, { reason: input.value.trim() });
       if (e) {
         err.textContent = e;
         confirm.disabled = false;
       } else if (openId === c.id) closeSheet(); // S-22 req 8
     };
+    const grow = () => {
+      input.style.height = "auto";
+      input.style.height = `${Math.min(input.scrollHeight + 2, 200)}px`;
+    };
     confirm.onclick = send;
+    input.oninput = () => {
+      confirm.disabled = !input.value.trim();
+      grow();
+    };
     input.onkeydown = (ev) => {
-      if (ev.key === "Enter") send();
+      if (ev.key === "Enter" && (ev.metaKey || ev.ctrlKey)) {
+        ev.preventDefault();
+        send();
+      }
       if (ev.key === "Escape") render();
     };
-    wrap.replaceChildren(h("div", { class: "reason" }, input, confirm), err);
+    wrap.replaceChildren(h("div", { class: "reason reject" }, input, h("div", { class: "row" }, confirm)), err);
     input.focus();
   };
   wrap.append(
@@ -943,7 +956,7 @@ function specCard(c: Card): HTMLElement {
   const icon = ICON[(c.status === "queued" ? "approved" : c.status) as keyof typeof ICON] ?? ICON.draft;
   let status: HTMLElement;
   if (c.status === "approved" || c.status === "queued")
-    status = h("span", { class: "seal" }, svg(`<svg width="14" height="14" viewBox="0 0 14 14"><circle cx="7" cy="7" r="6.5" fill="#fff"/><path d="M4.3 7.2l1.8 1.8 3.6-3.8" fill="none" stroke="#16A34A" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`), c.status === "queued" ? "Queued" : "Approved");
+    status = h("span", { class: "seal" }, svg(`<svg width="14" height="14" viewBox="0 0 14 14"><circle cx="7" cy="7" r="6.5" fill="var(--on-color)"/><path d="M4.3 7.2l1.8 1.8 3.6-3.8" fill="none" stroke="var(--green-strong)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`), c.status === "queued" ? "Queued" : "Approved");
   else if (isNewDraft) status = h("span", { class: "pill", style: "background:var(--indigo-bg);color:var(--indigo-text)" }, h("i", { class: "dot", style: "background:var(--indigo)" }), "New");
   else if (stalledOn(c).length) status = h("span", { class: "status held" }, waitingLabel(stalledOn(c)));
   else if (updateOf(c)) status = h("span", { class: "status upd" }, "Update requested");
@@ -1281,15 +1294,15 @@ function drawLines(content: HTMLElement) {
   const H = content.scrollHeight;
   const paths: string[] = [];
   const color = (c: Card) => {
-    if (c.kind === "decision") return "#14B8A6";
-    if (c.kind === "question") return c.status === "open" ? "#F59E0B" : "#D4D4D8";
-    if (c.status === "active") return "#18181B"; // S-27: ink, like the building ring
-    if (c.status === "approved" || c.status === "queued") return "#22A55B";
-    if (c.status === "discussing") return "#F59E0B";
-    if (isNew(c)) return "#818CF8";
-    return "#D4D4D8";
+    if (c.kind === "decision") return "var(--teal-line)";
+    if (c.kind === "question") return c.status === "open" ? "var(--amber)" : "var(--line)";
+    if (c.status === "active") return "var(--text)"; // S-27: ink, like the building ring
+    if (c.status === "approved" || c.status === "queued") return "var(--green)";
+    if (c.status === "discussing") return "var(--amber)";
+    if (isNew(c)) return "var(--indigo-line)";
+    return "var(--line)";
   };
-  const dotColor = (c: Card) => (c.kind === "spec" && c.status === "active" ? "#18181B" : c.kind === "spec" && ["approved", "queued"].includes(c.status) ? "#22A55B" : c.kind === "question" && c.status === "open" ? "#F59E0B" : "#A1A1AA");
+  const dotColor = (c: Card) => (c.kind === "spec" && c.status === "active" ? "var(--text)" : c.kind === "spec" && ["approved", "queued"].includes(c.status) ? "var(--green)" : c.kind === "question" && c.status === "open" ? "var(--amber)" : "var(--faint)");
 
   for (const nodeDiv of content.querySelectorAll<HTMLElement>(".node")) {
     const parentCard = nodeDiv.querySelector(":scope > .card") as HTMLElement;
@@ -1317,7 +1330,7 @@ function drawLines(content: HTMLElement) {
           : `M${x1} ${y1} H${mx - r} Q${mx} ${y1} ${mx} ${y1 + r} V${y2 - r} Q${mx} ${y2} ${mx + r} ${y2} H${x2}`;
       paths.push(`<path d="${d}" stroke="${color(c)}"${c.status === "active" && !stalledOn(c).length && !quietFor(c) ? ' class="flow"' : ""}/>`);
     });
-    paths.push(`<circle cx="${x1}" cy="${y1}" r="3" fill="#fff" stroke="${dotColor(pc)}"/>`);
+    paths.push(`<circle cx="${x1}" cy="${y1}" r="3" fill="var(--card)" stroke="${dotColor(pc)}"/>`);
   }
   // Section headers branch down to their specs (S-11).
   for (const sec of content.querySelectorAll<HTMLElement>(".section:not(.collapsed)")) {
@@ -1335,7 +1348,7 @@ function drawLines(content: HTMLElement) {
       paths.push(`<path d="M${x} ${y0} V${y - 10} Q${x} ${y} ${x + 10} ${y} H${x2}" stroke="${color(c)}"${c.status === "active" && !stalledOn(c).length && !quietFor(c) ? ' class="flow"' : ""}/>`);
       any = true;
     }
-    if (any) paths.push(`<circle cx="${x}" cy="${y0}" r="3" fill="#fff" stroke="#A1A1AA"/>`);
+    if (any) paths.push(`<circle cx="${x}" cy="${y0}" r="3" fill="var(--card)" stroke="var(--faint)"/>`);
   }
   const el = svg(`<svg id="lines" width="${W}" height="${H}" fill="none" stroke-width="1.5">${paths.join("")}</svg>`);
   content.prepend(el);
@@ -1798,6 +1811,11 @@ function trackReply() {
 }
 
 window.addEventListener("keydown", (e) => {
+  if (e.key === "," && (e.metaKey || e.ctrlKey)) {
+    e.preventDefault();
+    return openSettings();
+  }
+  if (e.key === "Escape" && settingsOpen) return closeSettings();
   if (e.key === "Escape" && msgOpen) return closeMessage();
   if (e.key !== "/" || msgOpen || e.metaKey || e.ctrlKey) return;
   if ((e.target as HTMLElement).closest("input, textarea")) return;
@@ -1817,6 +1835,7 @@ let searchOpen = false;
 let searchQ = "";
 let searchFilter: "needs" | "building" | "questions" | "drafts" | null = null;
 let searchSel = 0;
+let searchShown = false;
 const searchCaret = { start: -1, end: -1 };
 
 const FILTERS: { key: NonNullable<typeof searchFilter>; label: string; test: (c: Card) => boolean }[] = [
@@ -1907,9 +1926,12 @@ function searchDrop(): HTMLElement {
     ["Decisions", results.filter((c) => c.kind === "decision")],
   ];
   let i = -1;
+  // The open animation plays once; renders while it stays open (typing, arrows, live updates) skip it.
+  const stay = searchShown;
+  searchShown = true;
   return h(
     "div",
-    { class: "search-drop" },
+    { class: `search-drop${stay ? " stay" : ""}` },
     h("div", { class: "s-head" }, svg(SEARCH_ICON), input, h("span", { class: "kbd" }, "Esc")),
     h(
       "div",
@@ -1936,7 +1958,20 @@ function searchDrop(): HTMLElement {
             const idx = ++i;
             return h(
               "div",
-              { class: `s-row${idx === searchSel ? " sel" : ""}`, onmousemove: () => idx !== searchSel && ((searchSel = idx), render()), onclick: () => chooseResult(c) },
+              {
+                class: `s-row${idx === searchSel ? " sel" : ""}`,
+                // Hover moves the highlight in place: a full render here rebuilt the list under the
+                // pointer, replaying the open animation and dropping clicks.
+                onmousemove: (e: MouseEvent) => {
+                  if (idx === searchSel) return;
+                  searchSel = idx;
+                  const row = e.currentTarget as HTMLElement;
+                  row.parentElement?.querySelectorAll(".s-row.sel").forEach((r) => r.classList.remove("sel"));
+                  row.classList.add("sel");
+                },
+                // On press, so a live re-render between press and release cannot swallow the choice.
+                onmousedown: (e: MouseEvent) => (e.preventDefault(), chooseResult(c)),
+              },
               svg(cardIcon(c).replace(/width="16" height="16"/, 'width="14" height="14"')),
               h("span", { class: "id" }, c.id),
               h("span", { class: "t" }, ...mark(c.title)),
@@ -1988,7 +2023,110 @@ function projectMenu(): HTMLElement {
     item("Decisions log", { right: String(decisions), onclick: () => openSearch(null, "D-") }),
     item("Open .spill folder", { onclick: () => (post("/api/open-folder", {}), (menuOpen = false), render()) }),
     h("div", { class: "pm-sep" }),
-    item("Project settings", { soon: true }),
+    item("Settings...", { right: "Cmd ,", onclick: () => openSettings() }),
+  );
+}
+
+// ---------- settings (S-39) ----------
+type Theme = "system" | "light" | "dark";
+let settingsOpen = false;
+let settingsTab: "general" | "appearance" = "general";
+// Starts from what index.html applied before first paint, so the shared setting can undo it.
+let theme: Theme = (document.documentElement.dataset.theme as Theme | undefined) ?? "system";
+let spillVersion = "";
+function applyTheme(t: Theme) {
+  theme = t;
+  if (t === "system") delete document.documentElement.dataset.theme;
+  else document.documentElement.dataset.theme = t;
+  try {
+    localStorage.setItem("spill.theme", t);
+  } catch {}
+}
+// Every window reads the shared choice from ~/.spill/settings.json, so a change in one reaches the rest.
+async function syncSettings() {
+  try {
+    const s = await (await fetch("/api/settings")).json();
+    spillVersion = s.version ?? "";
+    if (s.theme !== theme) {
+      applyTheme(s.theme);
+      if (settingsOpen) render();
+    }
+  } catch {}
+}
+syncSettings();
+setInterval(syncSettings, 3000);
+function openSettings(tab: "general" | "appearance" = "general") {
+  settingsOpen = true;
+  settingsTab = tab;
+  menuOpen = false;
+  render();
+}
+function closeSettings() {
+  settingsOpen = false;
+  render();
+}
+(window as any).spillSettings = () => openSettings();
+function pickTheme(t: Theme) {
+  applyTheme(t);
+  post("/api/settings", { theme: t });
+  render();
+}
+function settingsPanel(): HTMLElement {
+  const tab = (key: "general" | "appearance", label: string) =>
+    h("button", { class: `st-tab${settingsTab === key ? " on" : ""}`, onclick: () => ((settingsTab = key), render()) }, label);
+  const row = (label: string, ...value: (Node | string | null)[]) => h("div", { class: "st-row" }, h("span", { class: "k" }, label), h("span", { class: "v" }, ...value));
+  const n = (kind: string) => data.cards.filter((c) => c.kind === kind).length;
+  const plural = (k: number, word: string) => `${k} ${word}${k === 1 ? "" : "s"}`;
+  const lastClaude = data.events.findLast((e) => e.actor === "claude")?.at;
+  const recent = !!lastClaude && Date.now() - new Date(lastClaude).getTime() < 30 * 60 * 1000;
+  const general = h(
+    "div",
+    { class: "st-body" },
+    h(
+      "div",
+      { class: "st-project" },
+      h("img", { src: "/logo.svg", alt: "" }),
+      h("div", { class: "nm" }, h("b", {}, data.project || "Spill"), data.root ? h("span", { class: "mono" }, data.root.replace(/^\/Users\/[^/]+/, "~")) : null),
+      h("button", { class: "btn", onclick: () => post("/api/open-folder", { what: "project" }) }, "Show in Finder"),
+    ),
+    h(
+      "div",
+      { class: "st-group" },
+      row("Board", h("span", { class: "mono" }, ".spill/")),
+      row("Cards", `${plural(n("spec"), "spec")}, ${plural(n("question"), "question")}, ${plural(n("decision"), "decision")}`),
+      row(
+        "Claude",
+        h("i", { class: `st-dot${recent ? " on" : ""}` }),
+        recent ? "Connected through MCP" : "Not connected recently",
+        lastClaude ? h("span", { class: "st-faint" }, `last seen ${ago(lastClaude)}`) : null,
+      ),
+      row("Version", h("span", { class: "mono" }, spillVersion || "-")),
+    ),
+  );
+  const tile = (key: Theme, label: string, preview: HTMLElement) =>
+    h("button", { class: `st-theme${theme === key ? " on" : ""}`, onclick: () => pickTheme(key) }, preview, h("span", {}, label));
+  const mini = (mode: "l" | "d") => h("div", { class: `pv pv-${mode}` }, h("i", {}), h("i", {}), h("i", { class: "amb" }));
+  const appearance = h(
+    "div",
+    { class: "st-body" },
+    h("div", { class: "st-head" }, h("b", {}, "Theme"), h("span", {}, "Applies to every project window.")),
+    h(
+      "div",
+      { class: "st-themes" },
+      tile("system", "System", h("div", { class: "pv-split" }, mini("l"), mini("d"))),
+      tile("light", "Light", mini("l")),
+      tile("dark", "Dark", mini("d")),
+    ),
+  );
+  return h(
+    "div",
+    { class: "st-scrim", onmousedown: (e: MouseEvent) => e.target === e.currentTarget && closeSettings() },
+    h(
+      "div",
+      { class: "settings", role: "dialog", "aria-label": "Settings" },
+      h("div", { class: "st-bar" }, h("div", { class: "st-tabs" }, tab("general", "General"), tab("appearance", "Appearance")), h("button", { class: "st-esc", onclick: closeSettings, title: "Close" }, "Esc")),
+      settingsTab === "general" ? general : appearance,
+    ),
   );
 }
 const SEARCH_ICON = `<svg width="14" height="14" viewBox="0 0 14 14"><circle cx="6" cy="6" r="4.2" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M9.2 9.2l3 3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>`;
@@ -2001,7 +2139,7 @@ function toolbar(needs: number): HTMLElement {
       { class: `pm-btn${menuOpen ? " on" : ""}`, onclick: () => ((menuOpen = !menuOpen), (searchOpen = false), (menuSections = false), render()) },
       h("img", { class: "logo", src: "/logo.svg", alt: "Spill" }),
       h("span", { class: "project" }, data.project || "Spill"),
-      svg(`<svg width="12" height="12" viewBox="0 0 12 12"><path d="${menuOpen ? "M3 7.5l3-3 3 3" : "M3 4.5l3 3 3-3"}" fill="none" stroke="#71717A" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>`),
+      svg(`<svg width="12" height="12" viewBox="0 0 12 12"><path d="${menuOpen ? "M3 7.5l3-3 3 3" : "M3 4.5l3 3 3-3"}" fill="none" stroke="var(--muted)" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>`),
     ),
     h("i", { class: "tb-sep" }),
     h(
@@ -2347,7 +2485,7 @@ function render() {
     roots: tree.filter((n) => (n.card.section ?? "") === s.id),
   }));
   const loose = tree.filter((n) => !n.card.section || !byId.has(n.card.section));
-  if (loose.length) groups.push({ key: "none", title: "No section", color: "#A1A1AA", roots: loose });
+  if (loose.length) groups.push({ key: "none", title: "No section", color: "var(--faint)", roots: loose });
   sectionOf.clear();
   for (const g of groups) for (const c of g.roots.flatMap(subtree)) sectionOf.set(c.id, g.key);
   openSections();
@@ -2393,9 +2531,10 @@ function render() {
   const panelGroups = [rejected, spot, pendingGroup(), upNextGroup(), lastBuiltGroup(), decisionsGroup()].filter(Boolean);
   const strip = panelGroups.length ? h("div", { class: `strip${panelCollapsed ? " collapsed" : ""}` }, countsRow(), ...(panelCollapsed ? [] : panelGroups)) : null;
 
+  if (!searchOpen) searchShown = false;
   const chrome = h("div", { class: "chrome", "data-tauri-drag-region": "" }, h("div", { class: "bar-wrap" }, searchOpen ? searchDrop() : topbar, menuOpen ? projectMenu() : searchOpen ? null : messageDrop()));
   updateFab();
-  app.replaceChildren(canvas, chrome, ...(strip ? [strip] : []), ...(side ? [side] : []), ...(data.cards.length ? [] : [h("div", { class: "empty" }, "No cards yet. Claude adds them through the spill MCP server.")]));
+  app.replaceChildren(canvas, chrome, ...(strip ? [strip] : []), ...(side ? [side] : []), ...(settingsOpen ? [settingsPanel()] : []), ...(data.cards.length ? [] : [h("div", { class: "empty" }, "No cards yet. Claude adds them through the spill MCP server.")]));
   if (scroll) {
     canvas.scrollLeft = scroll.left;
     canvas.scrollTop = scroll.top;

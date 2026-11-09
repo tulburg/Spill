@@ -211,6 +211,8 @@ fn build_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
         &[
             &PredefinedMenuItem::about(app, None, None)?,
             &sep()?,
+            &MenuItem::with_id(app, "settings", "Settings...", true, Some("CmdOrCtrl+,"))?,
+            &sep()?,
             &PredefinedMenuItem::services(app, None)?,
             &sep()?,
             &PredefinedMenuItem::hide(app, None)?,
@@ -317,6 +319,13 @@ fn on_menu(app: &AppHandle, id: &str) {
             let focused = app.state::<AppState>().0.lock().unwrap().focused.clone();
             if let Some(w) = focused.and_then(|l| app.get_webview_window(&l)) {
                 let _ = w.eval("location.reload()");
+            }
+        }
+        // S-39: the board UI owns the Settings panel; the menu just opens it in the focused window.
+        "settings" => {
+            let focused = app.state::<AppState>().0.lock().unwrap().focused.clone();
+            if let Some(w) = focused.and_then(|l| app.get_webview_window(&l)) {
+                let _ = w.eval("window.spillSettings && window.spillSettings()");
             }
         }
         _ => {

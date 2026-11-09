@@ -1,9 +1,25 @@
-import { watch } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, watch, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { Board } from "./board";
 import type { Store } from "./store";
 
 const UI_DIR = join(import.meta.dir, "..", "ui");
+const VERSION: string = JSON.parse(readFileSync(join(import.meta.dir, "..", "package.json"), "utf8")).version;
+
+// S-39: app-wide settings shared by every project window, in ~/.spill/settings.json.
+const THEMES = ["system", "light", "dark"];
+function settingsFile() {
+  return join(homedir(), ".spill", "settings.json");
+}
+function readSettings(): { theme: string } {
+  try {
+    const s = JSON.parse(readFileSync(settingsFile(), "utf8"));
+    return { theme: THEMES.includes(s.theme) ? s.theme : "system" };
+  } catch {
+    return { theme: "system" };
+  }
+}
 
 async function bundle(): Promise<string> {
   const out = await Bun.build({ entrypoints: [join(UI_DIR, "main.ts")], target: "browser" });
@@ -96,8 +112,20 @@ export async function startServer(store: Store, port = 4747) {
       // S-7: the project menu's "Open .spill folder".
       "/api/open-folder": {
         POST: (req) =>
-          act(req, () => {
-            if (process.platform === "darwin") Bun.spawn(["open", store.dir]);
+          act(req, (body) => {
+            // S-39: Settings > General reveals the project folder instead.
+            const target = body?.what === "project" ? dirname(store.dir) : store.dir;
+            if (process.platform === "darwin") Bun.spawn(["open", target]);
+          }),
+      },
+      "/api/settings": {
+        GET: () => json({ ...readSettings(), version: VERSION }),
+        POST: (req) =>
+          act(req, (body) => {
+            if (!THEMES.includes(body?.theme)) throw new Error("Theme must be system, light or dark");
+            const dir = join(homedir(), ".spill");
+            if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+            writeFileSync(settingsFile(), JSON.stringify({ ...readSettings(), theme: body.theme }, null, 2) + "\n");
           }),
       },
       // S-23: a board-level message to Claude.
