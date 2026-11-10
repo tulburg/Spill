@@ -1,4 +1,6 @@
 import type { Board } from "./board";
+import { Designs, type Artboard } from "./designs";
+import { screenshot } from "./render";
 import type { Card, Focus, SpillEvent } from "./store";
 
 export function summary(c: Card): string {
@@ -47,7 +49,8 @@ interface Tool {
   name: string;
   description: string;
   inputSchema: { type: "object"; properties: Record<string, unknown>; required?: string[] };
-  run: (b: Board, a: any) => string;
+  // A string is sent as text; content is sent as is (S-44: screenshots are images).
+  run: (b: Board, a: any) => string | { content: object[] };
 }
 
 export const TOOLS: Tool[] = [
@@ -236,4 +239,120 @@ export const TOOLS: Tool[] = [
       return r ? `${r}\n\n${body}` : body;
     },
   },
+  // S-44: design tools, named and shaped after OpenDraw's MCP tools.
+  ...designTools(),
 ];
+
+function boardLine(x: Artboard): string {
+  return `${x.id.padEnd(6)} ${x.variant ? `${x.variant}  ` : ""}${x.width} x ${x.height}  ${x.status.padEnd(8)} ${x.title}`;
+}
+
+function designTools(): Tool[] {
+  const spec = { type: "string", description: "The spec (S-n) the designs belong to" };
+  const styleMap = { type: "object", additionalProperties: { type: ["string", "number", "null"] }, description: "CSS properties, camelCase or kebab-case. Bare numbers are px; null removes a property." };
+  const d = (b: Board) => new Designs(b.store);
+  return [
+    {
+      name: "spill_design_list",
+      description: "A spec's artboards (or every spec's, without spec): id, size, status and title, grouped by variant when the spec has variants.",
+      inputSchema: { type: "object", properties: { spec } },
+      run: (b, a) => {
+        const all = d(b).list(a.spec);
+        const lines = all.flatMap((s) => {
+          const head = `${s.spec}: ${s.artboards.length} artboard${s.artboards.length === 1 ? "" : "s"}`;
+          const variants = [...new Set(s.artboards.map((x) => x.variant))].sort();
+          if (variants.length === 1 && !variants[0]) return [head, ...s.artboards.map((x) => `  ${boardLine(x)}`)];
+          return [head, ...variants.flatMap((v) => [`  ${v ? `Variant ${v}` : "No variant"}`, ...s.artboards.filter((x) => x.variant === v).map((x) => `    ${boardLine(x)}`)])];
+        });
+        return lines.join("\n") || (a.spec ? `${a.spec} has no designs yet.` : "No designs yet.");
+      },
+    },
+    {
+      name: "spill_design_create_artboard",
+      description:
+        "Creates an artboard (a top-level frame) for a spec's design and returns its id. styles must include width and height (e.g. 1440px, 390px); add a background and layout (display flex, flexDirection, padding, gap). Most specs have one design and need no variant: leave variant out. Pass variant (A, B, C) only when you offer the user several directions to choose from; the app then shows them side by side on the board.",
+      inputSchema: { type: "object", properties: { spec, title: str, variant: str, styles: styleMap }, required: ["spec", "title", "styles"] },
+      run: (b, a) => `Created ${boardLine(d(b).createArtboard(a))}`,
+    },
+    {
+      name: "spill_design_write_html",
+      description:
+        'Turns HTML with inline styles into design nodes. "insert-children" appends them inside target (an artboard or node id); "replace" removes target and puts them in its place. Every element gets a data-node id (ids in the HTML are replaced). Write one visual group per call (a header, a card, a row). Layout is flexbox with padding and gap. Returns the new top-level node ids.',
+      inputSchema: {
+        type: "object",
+        properties: { spec, html: str, target: { ...str, description: "In insert-children mode the parent; in replace mode the node to replace" }, mode: { type: "string", enum: ["insert-children", "replace"] } },
+        required: ["spec", "html", "target", "mode"],
+      },
+      run: (b, a) => `Wrote ${d(b).writeHtml(a).join(", ")}`,
+    },
+    {
+      name: "spill_design_read",
+      description: "The HTML of an artboard or node, with its data-node ids, so you can edit part of it.",
+      inputSchema: { type: "object", properties: { spec, node: { ...str, description: "Artboard or node id" } }, required: ["spec", "node"] },
+      run: (b, a) => d(b).read(a),
+    },
+    {
+      name: "spill_design_update_styles",
+      description: "Changes inline styles on nodes without touching their children. Each update sets styles on every node in nodeIds; null removes a property. On an artboard, width and height also update the artboard's size.",
+      inputSchema: {
+        type: "object",
+        properties: { spec, updates: { type: "array", items: { type: "object", properties: { nodeIds: strList, styles: styleMap }, required: ["nodeIds", "styles"] } } },
+        required: ["spec", "updates"],
+      },
+      run: (b, a) => `Styled ${d(b).updateStyles(a).join(", ")}`,
+    },
+    {
+      name: "spill_design_duplicate",
+      description:
+        "Copies nodes with fresh ids. A node copy goes right after the original, or at the end of parentId. An artboard copy is a new artboard in the same variant; pass variant to start another direction from it (only when offering several directions), and title to name it. Returns the new ids in order.",
+      inputSchema: {
+        type: "object",
+        properties: { spec, nodes: { type: "array", items: { type: "object", properties: { id: str, parentId: str, variant: str, title: str }, required: ["id"] } } },
+        required: ["spec", "nodes"],
+      },
+      run: (b, a) => `Duplicated as ${d(b).duplicate(a).join(", ")}`,
+    },
+    {
+      name: "spill_design_delete",
+      description: "Deletes nodes and everything inside them. An artboard id deletes the whole artboard.",
+      inputSchema: { type: "object", properties: { spec, nodeIds: strList }, required: ["spec", "nodeIds"] },
+      run: (b, a) => `Deleted ${d(b).delete(a).join(", ")}`,
+    },
+    {
+      name: "spill_design_screenshot",
+      description: "Renders an artboard or node to PNG with WebKit, so you can check your work after meaningful changes. scale 1 or 2 (default 1).",
+      inputSchema: { type: "object", properties: { spec, node: str, scale: { type: "number" } }, required: ["spec", "node"] },
+      run: (b, a) => ({ content: [{ type: "image", data: Buffer.from(screenshot(d(b), a)).toString("base64"), mimeType: "image/png" }] }),
+    },
+    // S-46: the user's review of a spec's designs.
+    {
+      name: "spill_design_feedback",
+      description:
+        "The user's review of a spec's designs: whether the design (or each variant) is accepted, rejected with a reason, or waiting; every pin with its number, artboard, position (x, y in artboard px from the top left) and note; comments; and the replies on each. Pins and comments also reach spill_inbox. After changing the design for a pin, reply and resolve it with spill_design_reply.",
+      inputSchema: { type: "object", properties: { spec }, required: ["spec"] },
+      run: (b, a) => {
+        const f = d(b).feedback(a.spec);
+        if (!f.artboards.length) return `${a.spec} has no designs yet.`;
+        const keys = f.keys.length ? f.keys : [""];
+        const replies = (rs: { by: string; text: string }[], pad: string) => rs.map((r) => `${pad}${r.by === "claude" ? "You" : "User"}: ${r.text}`);
+        const out: string[] = [];
+        for (const k of keys) {
+          const r = f.reviews[k];
+          out.push(`${k ? `Variant ${k}` : "Design"}: ${r ? r.status : "waiting"}${r?.reason ? `: ${r.reason}` : ""}`);
+          for (const p of f.pins.filter((x) => (f.pinKey[x.n] ?? "") === k)) {
+            const ab = f.artboards.find((x) => x.id === p.artboard);
+            out.push(`  Pin ${p.n}${p.resolved ? " (resolved)" : ""} on ${p.artboard}${ab ? ` "${ab.title}"` : ""} at (${p.x}, ${p.y}): ${p.text}`, ...replies(p.replies, "    "));
+          }
+          for (const n of f.notes.filter((x) => x.variant === k)) out.push(`  Comment ${n.id}: ${n.text}`, ...replies(n.replies, "    "));
+        }
+        return out.join("\n");
+      },
+    },
+    {
+      name: "spill_design_reply",
+      description: "Reply to a pin (pin: its number) or a comment (comment: c-n) on a spec's design. resolve: true marks a pin resolved, after you changed the design for it; text is then optional.",
+      inputSchema: { type: "object", properties: { spec, pin: { type: "number" }, comment: str, text: str, resolve: { type: "boolean" } }, required: ["spec"] },
+      run: (b, a) => d(b).reply(a),
+    },
+  ];
+}

@@ -3,6 +3,7 @@ import { cpSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync }
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Board } from "../src/board";
+import { Designs } from "../src/designs";
 import { handle } from "../src/mcp";
 import { Store, formatCard, parseCard } from "../src/store";
 
@@ -345,13 +346,14 @@ describe("mcp", () => {
   const call = (name: string, args: object = {}) =>
     handle(store, { jsonrpc: "2.0", id: 1, method: "tools/call", params: { name, arguments: args } }) as any;
 
-  test("initialize and list the 17 tools", () => {
+  test("initialize and list the 27 tools", () => {
     const init = handle(store, { jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2025-06-18" } }) as any;
     expect(init.result.serverInfo.name).toBe("spill");
     const list = handle(store, { jsonrpc: "2.0", id: 2, method: "tools/list" }) as any;
     expect(list.result.tools.map((t: any) => t.name)).toEqual([
       "spill_board", "spill_get", "spill_ask", "spill_draft_spec", "spill_update",
       "spill_set_status", "spill_comment", "spill_link", "spill_unlink", "spill_record", "spill_files", "spill_propose_replace", "spill_rejections", "spill_focus", "spill_checks", "spill_reply", "spill_inbox",
+      "spill_design_list", "spill_design_create_artboard", "spill_design_write_html", "spill_design_read", "spill_design_update_styles", "spill_design_duplicate", "spill_design_delete", "spill_design_screenshot", "spill_design_feedback", "spill_design_reply",
     ]);
   });
 
@@ -602,5 +604,192 @@ describe("message threads (S-30)", () => {
     claude.inbox();
     claude.message("for a again", [], t1);
     expect(store.messageState()).toBe("working");
+  });
+});
+
+// S-44: designs per spec, through the MCP tools.
+describe("designs", () => {
+  const call = (name: string, args: object = {}) => {
+    const r: any = handle(store, { jsonrpc: "2.0", id: 1, method: "tools/call", params: { name, arguments: args } });
+    if (r.result.isError) throw new Error(r.result.content[0].text);
+    return r.result.content[0].text as string;
+  };
+  const designDir = () => join(dir, "designs", "S-1");
+  const index = () => JSON.parse(readFileSync(join(designDir(), "index.json"), "utf8"));
+  const newId = (text: string) => /ab-\d+|n-\d+/.exec(text)![0];
+
+  beforeEach(() => {
+    claude.draftSpec({ title: "Designed", body: "x" });
+  });
+
+  test("create: two variants with one artboard each, files and index on disk", () => {
+    const a = newId(call("spill_design_create_artboard", { spec: "S-1", title: "Home", variant: "A", styles: { width: "390px", height: 844, background: "#fff" } }));
+    const b = newId(call("spill_design_create_artboard", { spec: "S-1", title: "Home", variant: "b", styles: { width: "390px", height: "844px" } }));
+    expect(readdirSync(designDir()).sort()).toEqual([`${a}.html`, `${b}.html`, "index.json"].sort());
+    const ix = index();
+    expect(ix.artboards.map((x: any) => [x.id, x.variant, x.width, x.height, x.status])).toEqual([
+      [a, "A", "390px", "844px", "waiting"],
+      [b, "B", "390px", "844px", "waiting"],
+    ]);
+    expect(readFileSync(join(designDir(), `${a}.html`), "utf8")).toContain('style="width: 390px; height: 844px; background: #fff"');
+    expect(store.events().filter((e) => e.action === "design" && e.card === "S-1" && e.actor === "claude")).toHaveLength(2);
+    expect(() => call("spill_design_create_artboard", { spec: "S-9", title: "x", styles: { width: 1, height: 1 } })).toThrow(/No card S-9/);
+    expect(() => call("spill_design_create_artboard", { spec: "S-1", title: "x", styles: { width: 1 } })).toThrow(/width and height/);
+  });
+
+  test("write and read: the HTML comes back the same, with node ids", () => {
+    const ab = newId(call("spill_design_create_artboard", { spec: "S-1", title: "Card", styles: { width: 400, height: 300 } }));
+    const html = '<div style="display: flex; gap: 8px"><p style="color: red">Hi &amp; bye</p><img src="a.png"><svg viewBox="0 0 10 10"><path d="M0 0L10 10"/></svg></div>';
+    const out = call("spill_design_write_html", { spec: "S-1", html, target: ab, mode: "insert-children" });
+    const id = newId(out.replace(ab, ""));
+    const back = call("spill_design_read", { spec: "S-1", node: id });
+    expect(back.replace(/ data-node="n-\d+"/g, "")).toBe(html.replace("<path d=\"M0 0L10 10\"/>", '<path d="M0 0L10 10"></path>'));
+    // Ids are stable: read the whole artboard, then replace one child by id.
+    const pId = /<p data-node="(n-\d+)"/.exec(call("spill_design_read", { spec: "S-1", node: ab }))![1];
+    call("spill_design_write_html", { spec: "S-1", html: '<p data-node="n-1">New</p>', target: pId, mode: "replace" });
+    const after = call("spill_design_read", { spec: "S-1", node: id });
+    expect(after).toContain(">New</p>");
+    expect(after).not.toContain("Hi &amp; bye");
+    expect(after).toContain('<img data-node=');
+    expect(() => call("spill_design_write_html", { spec: "S-1", html: "<p>x</p>", target: ab, mode: "replace" })).toThrow(/is an artboard/);
+  });
+
+  test("update_styles changes only that node", () => {
+    const ab = newId(call("spill_design_create_artboard", { spec: "S-1", title: "S", styles: { width: 200, height: 100 } }));
+    call("spill_design_write_html", { spec: "S-1", html: '<div style="padding: 4px"><span style="color: blue; font-size: 12px">a</span></div>', target: ab, mode: "insert-children" });
+    const before = call("spill_design_read", { spec: "S-1", node: ab });
+    const span = /<span data-node="(n-\d+)"/.exec(before)![1];
+    call("spill_design_update_styles", { spec: "S-1", updates: [{ nodeIds: [span], styles: { color: "green", fontSize: null, fontWeight: 600 } }] });
+    const after = call("spill_design_read", { spec: "S-1", node: ab });
+    expect(after).toContain('style="color: green; font-weight: 600"');
+    expect(after.replace(/<span[^>]*>/, "")).toBe(before.replace(/<span[^>]*>/, ""));
+    call("spill_design_update_styles", { spec: "S-1", updates: [{ nodeIds: [ab], styles: { width: "320px" } }] });
+    expect(index().artboards[0].width).toBe("320px");
+  });
+
+  test("duplicate nodes and artboards with fresh ids", () => {
+    const ab = newId(call("spill_design_create_artboard", { spec: "S-1", title: "Dup", styles: { width: 200, height: 100 } }));
+    const row = newId(call("spill_design_write_html", { spec: "S-1", html: "<div><b>x</b></div>", target: ab, mode: "insert-children" }).replace(ab, ""));
+    const copy = newId(call("spill_design_duplicate", { spec: "S-1", nodes: [{ id: row }] }));
+    expect(copy).not.toBe(row);
+    const html = call("spill_design_read", { spec: "S-1", node: ab });
+    expect(html.match(/<b data-node="(n-\d+)"/g)).toHaveLength(2);
+    expect(new Set(html.match(/data-node="[^"]+"/g)).size).toBe(html.match(/data-node="[^"]+"/g)!.length);
+    expect(html.indexOf(`data-node="${row}"`)).toBeLessThan(html.indexOf(`data-node="${copy}"`));
+    const ab2 = newId(call("spill_design_duplicate", { spec: "S-1", nodes: [{ id: ab, variant: "B", title: "Dup B" }] }));
+    expect(ab2).toMatch(/^ab-/);
+    expect(index().artboards.map((x: any) => [x.id, x.variant, x.title])).toEqual([
+      [ab, "", "Dup"],
+      [ab2, "B", "Dup B"],
+    ]);
+    expect(call("spill_design_read", { spec: "S-1", node: ab2 }).match(/<b /g)).toHaveLength(2);
+  });
+
+  test("artboards without variants list plainly", () => {
+    call("spill_design_create_artboard", { spec: "S-1", title: "Only", styles: { width: 100, height: 100 } });
+    expect(index().artboards[0].variant).toBe("");
+    const list = call("spill_design_list", { spec: "S-1" });
+    expect(list).not.toContain("Variant");
+    expect(list).toMatch(/ab-\d+\s+100px x 100px\s+waiting\s+Only/);
+  });
+
+  test("delete nodes and artboards, and list them by variant", () => {
+    const a = newId(call("spill_design_create_artboard", { spec: "S-1", title: "One", variant: "A", styles: { width: 100, height: 100 } }));
+    const b = newId(call("spill_design_create_artboard", { spec: "S-1", title: "Two", variant: "B", styles: { width: 100, height: 100 } }));
+    const n = newId(call("spill_design_write_html", { spec: "S-1", html: "<p>gone</p>", target: a, mode: "insert-children" }).replace(a, ""));
+    const list = call("spill_design_list", { spec: "S-1" });
+    expect(list).toContain("S-1: 2 artboards");
+    expect(list.indexOf("Variant A")).toBeLessThan(list.indexOf("Variant B"));
+    expect(call("spill_design_list")).toContain("S-1: 2 artboards");
+    call("spill_design_delete", { spec: "S-1", nodeIds: [n] });
+    expect(call("spill_design_read", { spec: "S-1", node: a })).not.toContain("gone");
+    call("spill_design_delete", { spec: "S-1", nodeIds: [b] });
+    expect(readdirSync(designDir())).not.toContain(`${b}.html`);
+    expect(call("spill_design_list", { spec: "S-1" })).not.toContain("Two");
+    expect(() => call("spill_design_read", { spec: "S-1", node: b })).toThrow(/No node/);
+  });
+
+  // S-46
+  test("review: pins and comments reach the inbox, feedback gives positions, Claude replies and resolves", () => {
+    const a = newId(call("spill_design_create_artboard", { spec: "S-1", title: "Home", variant: "A", styles: { width: 400, height: 300 } }));
+    newId(call("spill_design_create_artboard", { spec: "S-1", title: "Home", variant: "B", styles: { width: 400, height: 300 } }));
+    store.takeInbox();
+    const u = new Designs(store, "user");
+    const pin = u.pin({ spec: "S-1", artboard: a, x: 120.4, y: 80, text: "Bigger title" });
+    expect(pin.n).toBe(1);
+    u.note({ spec: "S-1", variant: "b", text: "Too dark overall" });
+    expect(() => u.note({ spec: "S-1", text: "no variant named" })).toThrow(/variants A, B/);
+    const inbox = store.takeInbox();
+    expect(inbox.map((e) => [e.actor, e.action, e.detail])).toEqual([
+      ["user", "design_pin", `variant A, pin 1 on ${a} "Home" at (120, 80): Bigger title`],
+      ["user", "design_comment", "variant B, comment c-1: Too dark overall"],
+    ]);
+    const fb = call("spill_design_feedback", { spec: "S-1" });
+    expect(fb).toContain(`Variant A: waiting\n  Pin 1 on ${a} "Home" at (120, 80): Bigger title`);
+    expect(fb).toContain("Variant B: waiting\n  Comment c-1: Too dark overall");
+    expect(call("spill_design_reply", { spec: "S-1", pin: 1, text: "Made it 32px", resolve: true })).toBe("Replied to and resolved pin 1");
+    expect(call("spill_design_reply", { spec: "S-1", comment: "c-1", text: "Lightened it" })).toBe("Replied to comment c-1");
+    const after = call("spill_design_feedback", { spec: "S-1" });
+    expect(after).toContain("Pin 1 (resolved)");
+    expect(after).toContain("    You: Made it 32px");
+    expect(after).toContain("    You: Lightened it");
+  });
+
+  test("review: accept and reject per variant; approval waits for an accepted design; nothing is deleted", () => {
+    call("spill_design_create_artboard", { spec: "S-1", title: "Home", variant: "A", styles: { width: 400, height: 300 } });
+    call("spill_design_create_artboard", { spec: "S-1", title: "Home", variant: "B", styles: { width: 400, height: 300 } });
+    const u = new Designs(store, "user");
+    expect(() => new Designs(store, "claude").review({ spec: "S-1", variant: "A", status: "accepted" })).toThrow(/Only the user/);
+    expect(() => u.review({ spec: "S-1", variant: "B", status: "rejected" })).toThrow(/reason/);
+    u.review({ spec: "S-1", variant: "B", status: "rejected", reason: "Too busy\nand dark" });
+    expect(() => user.setStatus({ id: "S-1", status: "approved" })).toThrow(/designs waiting for review/);
+    u.review({ spec: "S-1", variant: "A", status: "accepted" });
+    expect(new Designs(store).list("S-1")[0].artboards.map((x) => [x.variant, x.status])).toEqual([["A", "accepted"], ["B", "rejected"]]);
+    expect(call("spill_design_feedback", { spec: "S-1" })).toContain("Variant B: rejected: Too busy\nand dark");
+    user.setStatus({ id: "S-1", status: "approved" });
+    expect(store.get("S-1").status).toBe("approved");
+    expect(readdirSync(designDir()).filter((f) => f.endsWith(".html"))).toHaveLength(2);
+  });
+
+  test("review: a spec without variants is accepted as a whole", () => {
+    call("spill_design_create_artboard", { spec: "S-1", title: "One", styles: { width: 400, height: 300 } });
+    call("spill_design_create_artboard", { spec: "S-1", title: "Two", styles: { width: 400, height: 300 } });
+    const u = new Designs(store, "user");
+    expect(() => user.setStatus({ id: "S-1", status: "approved" })).toThrow(/designs waiting/);
+    u.review({ spec: "S-1", status: "accepted" });
+    expect(new Designs(store).list("S-1")[0].artboards.map((x) => x.status)).toEqual(["accepted", "accepted"]);
+    expect(call("spill_design_feedback", { spec: "S-1" })).toMatch(/^Design: accepted/);
+    user.setStatus({ id: "S-1", status: "approved" });
+  });
+
+  // S-47
+  test("approval snapshots the designs; later edits leave the snapshot as approved", () => {
+    const ab = newId(call("spill_design_create_artboard", { spec: "S-1", title: "Home", styles: { width: 400, height: 300 } }));
+    call("spill_design_write_html", { spec: "S-1", target: ab, mode: "insert-children", html: "<p>Before</p>" });
+    const u = new Designs(store, "user");
+    u.pin({ spec: "S-1", artboard: ab, x: 10, y: 20, text: "Bigger" });
+    u.review({ spec: "S-1", status: "accepted" });
+    expect(new Designs(store).snapshots("S-1")).toHaveLength(0);
+    user.setStatus({ id: "S-1", status: "approved" });
+    const [ref] = new Designs(store).snapshots("S-1");
+    expect(ref.seq).toBe(store.events().length - 1);
+    expect(store.events()[ref.seq].detail).toMatch(/-> approved/);
+    call("spill_design_write_html", { spec: "S-1", target: ab, mode: "insert-children", html: "<p>After</p>" });
+    call("spill_design_reply", { spec: "S-1", pin: 1, resolve: true });
+    const snap = new Designs(store).readSnapshot(ref.hash)!;
+    expect(snap.artboards[0].html).toContain("Before");
+    expect(snap.artboards[0].html).not.toContain("After");
+    expect(snap.artboards[0].status).toBe("accepted");
+    expect(snap.feedback.pins[0].resolved).toBeUndefined();
+    expect(new Designs(store).htmlHashes("S-1")[ab]).not.toBe(snap.artboards[0].h);
+    expect(readdirSync(join(dir, "versions", "designs", "blobs"))).toEqual([`${ref.hash}.json`]);
+  });
+
+  test("a spec without designs takes no snapshot; a text edit takes none either", () => {
+    user.setStatus({ id: "S-1", status: "approved" });
+    expect(new Designs(store).snapshots("S-1")).toHaveLength(0);
+    call("spill_design_create_artboard", { spec: "S-1", title: "Home", styles: { width: 400, height: 300 } });
+    claude.update({ id: "S-1", body: "y" });
+    expect(new Designs(store).snapshots("S-1")).toHaveLength(0);
   });
 });

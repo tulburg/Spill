@@ -54,5 +54,125 @@
       "path": ".spill/SPILL.md",
       "change": "changed"
     }
+  ],
+  "S-44": [
+    {
+      "path": "src/designs.ts",
+      "change": "new"
+    },
+    {
+      "path": "src/render.swift",
+      "change": "new"
+    },
+    {
+      "path": "src/render.ts",
+      "change": "new"
+    },
+    {
+      "path": "src/tools.ts",
+      "change": "changed"
+    },
+    {
+      "path": "src/mcp.ts",
+      "change": "changed"
+    },
+    {
+      "path": "test/spill.test.ts",
+      "change": "changed"
+    }
+  ],
+  "S-45": [
+    {
+      "path": "src/designs.ts",
+      "change": "changed"
+    },
+    {
+      "path": "src/tools.ts",
+      "change": "changed"
+    },
+    {
+      "path": "test/spill.test.ts",
+      "change": "changed"
+    },
+    {
+      "path": ".spill/SPILL.md",
+      "change": "changed"
+    },
+    {
+      "path": "ui/main.ts",
+      "change": "changed"
+    },
+    {
+      "path": "ui/app.css",
+      "change": "changed"
+    },
+    {
+      "path": "src/server.ts",
+      "change": "changed"
+    }
+  ],
+  "S-46": [
+    {
+      "path": "src/designs.ts",
+      "change": "changed"
+    },
+    {
+      "path": "src/board.ts",
+      "change": "changed"
+    },
+    {
+      "path": "src/server.ts",
+      "change": "changed"
+    },
+    {
+      "path": "src/tools.ts",
+      "change": "changed"
+    },
+    {
+      "path": "ui/main.ts",
+      "change": "changed"
+    },
+    {
+      "path": "ui/app.css",
+      "change": "changed"
+    },
+    {
+      "path": "test/spill.test.ts",
+      "change": "changed"
+    },
+    {
+      "path": ".spill/SPILL.md",
+      "change": "changed"
+    }
+  ],
+  "S-47": [
+    {
+      "path": "src/designs.ts",
+      "change": "changed"
+    },
+    {
+      "path": "src/board.ts",
+      "change": "changed"
+    },
+    {
+      "path": "src/server.ts",
+      "change": "changed"
+    },
+    {
+      "path": "ui/main.ts",
+      "change": "changed"
+    },
+    {
+      "path": "ui/app.css",
+      "change": "changed"
+    },
+    {
+      "path": "test/spill.test.ts",
+      "change": "changed"
+    },
+    {
+      "path": ".spill/SPILL.md",
+      "change": "changed"
+    }
   ]
 }

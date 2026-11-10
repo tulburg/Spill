@@ -1020,3 +1020,144 @@ button.fix:disabled { border-color: var(--border); color: var(--faint); cursor: 
 .reason.reject .row { display: flex; justify-content: flex-end; }
 .reason.reject .row .btn { flex: 0 0 auto; padding: 0 12px; }
 .strip .item.rej .why, .ev .d { white-space: pre-wrap; }
+
+/* S-45: designs in the spec Overview, the canvas card chip, and the larger canvas. */
+.designs { margin-top: 24px; display: flex; flex-direction: column; gap: 12px; }
+.dz-head { display: flex; align-items: center; gap: 8px; }
+.dz-label { font-size: 11px; font-weight: 600; letter-spacing: 0.04em; line-height: 14px; text-transform: uppercase; color: var(--muted); }
+.dz-n { font-family: "Geist Mono", monospace; font-size: 11px; line-height: 14px; color: var(--faint); }
+.dz-head .sp { flex: 1; }
+.dz-btn { display: inline-flex; align-items: center; gap: 6px; padding: 3px 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--card); font: inherit; font-size: 12px; font-weight: 500; line-height: 16px; color: var(--text); cursor: pointer; }
+.dz-btn:hover { background: var(--canvas); }
+.dz-row { display: flex; gap: 12px; overflow-x: auto; padding-bottom: 6px; margin: 0 -24px; padding-inline: 24px; scrollbar-width: thin; }
+.dz-item { flex: none; display: flex; flex-direction: column; gap: 6px; max-width: 236px; }
+.dz-thumb { position: relative; height: 112px; min-width: 72px; padding: 8px; display: flex; align-items: center; justify-content: center; border: 1px solid var(--border); border-radius: 8px; background: var(--canvas); cursor: zoom-in; }
+.dz-thumb:hover { border-color: var(--line); }
+.dz-thumb .dz { box-shadow: 0 1px 3px rgba(var(--shadow-rgb), 0.12); border-radius: 2px; }
+.dz-expand { position: absolute; top: 6px; right: 6px; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; border: 1px solid var(--border); border-radius: 6px; background: var(--card); color: var(--text-2); cursor: pointer; opacity: 0; transition: opacity 0.12s; }
+.dz-thumb:hover .dz-expand, .dz-expand:focus-visible { opacity: 1; }
+.dz-count { position: absolute; bottom: 6px; right: 6px; padding: 0 7px; border-radius: 999px; background: rgba(var(--ink-rgb), 0.8); color: var(--on-ink); font-family: "Geist Mono", monospace; font-size: 11px; line-height: 18px; }
+.dz-cap { display: flex; flex-direction: column; font-size: 12px; line-height: 16px; color: var(--text); min-width: 0; }
+.dz-cap.var { flex-direction: row; align-items: center; gap: 6px; }
+.dz-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; }
+.dz-cap.var .dz-name { font-weight: 500; }
+.dz-size { font-family: "Geist Mono", monospace; font-size: 11px; color: var(--faint); }
+.dz-letter { flex: none; width: 18px; height: 18px; border-radius: 5px; background: var(--text); color: var(--card); font-size: 10px; font-weight: 600; line-height: 18px; text-align: center; }
+.dz-st { flex: none; display: inline-flex; align-items: center; gap: 4px; font-size: 11px; color: var(--muted); }
+.dz-st i { width: 6px; height: 6px; border-radius: 3px; background: var(--amber); }
+.dz-st.accepted i { background: var(--green); }
+.dz-st.rejected i { background: var(--red); }
+.dz-chip { display: inline-flex; align-items: center; gap: 5px; padding: 0 8px; border: 0; border-radius: 999px; background: var(--canvas); font: inherit; font-size: 12px; font-weight: 500; line-height: 20px; color: var(--text-2); cursor: pointer; }
+.dz-chip:hover { color: var(--text); }
+
+.dzv-scrim { position: fixed; inset: 0; z-index: 50; background: rgba(var(--shadow-rgb), 0.18); display: flex; padding: 24px; animation: dzvin 0.14s ease-out; }
+@keyframes dzvin { from { opacity: 0; } }
+.dzv { flex: 1; display: flex; flex-direction: column; background: var(--card); border: 1px solid var(--border); border-radius: 16px; box-shadow: 0 16px 48px rgba(var(--shadow-rgb), 0.18); overflow: hidden; }
+.dzv-bar { height: 48px; flex: none; display: flex; align-items: center; gap: 10px; padding: 0 12px 0 16px; border-bottom: 1px solid var(--border); }
+.dzv-id { font-family: "Geist Mono", monospace; font-size: 12px; color: var(--text-2); }
+.dzv-title { font-size: 13px; font-weight: 500; color: var(--text); }
+.dzv-size { font-family: "Geist Mono", monospace; font-size: 11px; color: var(--faint); }
+.dzv-bar .sp { flex: 1; }
+.dzv-zoom { display: flex; align-items: center; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.dzv-zoom > * { padding: 4px 10px; border: 0; border-left: 1px solid var(--border); background: none; font: inherit; font-size: 12px; line-height: 16px; color: var(--text-2); }
+.dzv-zoom > :first-child { border-left: 0; }
+.dzv-zoom button { cursor: pointer; }
+.dzv-zoom button:hover, .dzv-zoom button.on { background: var(--canvas); color: var(--text); }
+.dzv-pct { min-width: 46px; text-align: center; font-family: "Geist Mono", monospace; font-size: 11px; color: var(--muted); }
+.dzv-stage { flex: 1; position: relative; overflow: hidden; background: var(--canvas); cursor: grab; touch-action: none; }
+.dzv-stage.dragging { cursor: grabbing; }
+.dzv-world { position: absolute; left: 0; top: 0; transform-origin: 0 0; display: flex; }
+.dzv-world.board { gap: 96px; align-items: flex-start; }
+.dzv-ab { box-shadow: 0 2px 10px rgba(var(--shadow-rgb), 0.12); }
+.dzv-group { display: flex; flex-direction: column; gap: 20px; }
+.dzv-glabel { display: flex; align-items: center; gap: 12px; font-size: 40px; font-weight: 500; color: var(--text); }
+.dzv-glabel .dz-letter { width: 48px; height: 48px; border-radius: 12px; font-size: 26px; line-height: 48px; }
+.dzv-set { display: flex; gap: 48px; align-items: flex-start; }
+.dzv-item { display: flex; flex-direction: column; gap: 10px; }
+.dzv-cap { font-size: 28px; color: var(--muted); }
+.dzv-hint { position: absolute; left: 16px; bottom: 12px; font-size: 12px; color: var(--muted); pointer-events: none; }
+.dzv-pos { position: absolute; right: 16px; bottom: 12px; font-family: "Geist Mono", monospace; font-size: 11px; color: var(--muted); pointer-events: none; }
+
+/* S-46: design review in the larger canvas */
+.dzv-body { flex: 1; min-height: 0; display: flex; }
+.dzv-body .dzv-stage { flex: 1; }
+.dzv-stage.pinning .dzv-ab { cursor: crosshair; }
+.dzv-back { display: inline-flex; align-items: center; gap: 6px; margin-left: 4px; padding: 4px 10px; border: 1px solid var(--border); border-radius: 8px; background: none; font: inherit; font-size: 12px; color: var(--text-2); cursor: pointer; }
+.dzv-back:hover { background: var(--canvas); color: var(--text); }
+.dzv-ab { position: relative; }
+.dzv-group.sel .dzv-set { outline: 6px solid var(--indigo); outline-offset: 16px; border-radius: 4px; }
+.dzv-glabel .dzr-pill { font-size: 22px; padding: 4px 12px; border-radius: 8px; }
+.dzv-glabel .dzr-pill svg { width: 20px; height: 20px; }
+.dzv-glabel .dzr-pill i { width: 12px; height: 12px; border-radius: 6px; }
+.dzv-group { cursor: pointer; }
+
+/* Pins keep their size at any zoom: --iz is 1 / zoom. */
+.dzv-pin { position: absolute; z-index: 2; width: 26px; height: 26px; margin: 0; padding: 0; border: 2px solid #fff; border-radius: 13px 13px 13px 2px; background: #18181b; color: #fff; font: 600 11px/22px system-ui, sans-serif; text-align: center; cursor: pointer; transform: translate(0, -100%) scale(var(--iz, 1)); transform-origin: 0 100%; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25); }
+.dzv-pin:hover, .dzv-pin.on { background: var(--indigo); }
+.dzv-pin.resolved { background: #fff; color: #71717a; border-color: #a1a1aa; }
+.dzv-pin.draft { background: var(--indigo); box-shadow: 0 0 0 4px rgba(var(--indigo-rgb), 0.3); cursor: default; }
+.dzv-pop { position: absolute; z-index: 3; width: 240px; padding: 10px; display: flex; flex-direction: column; gap: 8px; background: var(--card); border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 8px 24px rgba(var(--shadow-rgb), 0.18); transform: translate(18px, 6px) scale(var(--iz, 1)); transform-origin: 0 0; cursor: default; font-family: inherit; }
+.dzv-pop textarea { width: 100%; min-height: 52px; max-height: 200px; resize: none; box-sizing: border-box; border-radius: 8px; border: 1px solid var(--indigo); padding: 6px 10px; font: inherit; font-size: 13px; line-height: 18px; color: var(--text); background: var(--card); outline: none; box-shadow: 0 0 0 3px rgba(var(--indigo-rgb), 0.15); }
+.dzv-pop .row { display: flex; align-items: center; gap: 8px; }
+.dzv-pop .hint, .dzr .hint { flex: 1; font-size: 11px; color: var(--faint); }
+.btn.sm { flex: none; height: 28px; padding: 0 12px; font-size: 12px; }
+.btn.ghost { border-color: transparent; background: none; }
+
+/* The review panel */
+.dzr { width: 300px; flex: none; display: flex; flex-direction: column; border-left: 1px solid var(--border); background: var(--card); }
+.dzr-head { padding: 16px; display: flex; flex-direction: column; gap: 12px; border-bottom: 1px solid var(--border); }
+.dzr-title { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 500; color: var(--text); }
+.dzr-title .sp { flex: 1; }
+.dzr-label { font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-2); }
+.dzr-pill { display: inline-flex; align-items: center; gap: 4px; padding: 1px 6px; border-radius: 4px; font-size: 11px; font-weight: 500; line-height: 16px; white-space: nowrap; }
+.dzr-pill i { width: 6px; height: 6px; border-radius: 3px; background: var(--amber); }
+.dzr-pill.waiting { color: var(--amber-text); background: var(--amber-bg); }
+.dzr-pill.accepted { color: var(--green-text); background: var(--green-bg); }
+.dzr-pill.rejected { color: var(--red-text); background: var(--red-bg); }
+.dzr-actions { display: flex; gap: 8px; }
+.dzr-actions .btn { flex: 1; height: 32px; }
+.dzr-sub { font-size: 12px; line-height: 16px; color: var(--muted); }
+.dzr-reason textarea { flex: 1; min-height: 72px; max-height: 200px; resize: none; border-radius: 8px; border: 1px solid var(--red-line); padding: 6px 10px; font: inherit; font-size: 13px; line-height: 18px; color: var(--text); background: var(--card); outline: none; box-shadow: 0 0 0 3px rgba(var(--red-rgb), 0.12); box-sizing: border-box; }
+.dzr-row { display: flex; align-items: center; gap: 8px; }
+.dzr-row .sp { flex: 1; }
+.dzr-row .hint { flex: none; }
+.dzr-why { font-size: 12px; line-height: 16px; color: var(--red-text); white-space: pre-wrap; }
+.dzr-list { flex: 1; min-height: 0; overflow-y: auto; padding: 8px 8px; display: flex; flex-direction: column; }
+.dzr-empty { padding: 16px 8px; font-size: 12px; color: var(--muted); }
+.dzr-item { display: flex; gap: 10px; padding: 8px; border-radius: 8px; cursor: pointer; }
+.dzr-item:hover { background: var(--canvas); }
+.dzr-item.on { background: rgba(var(--indigo-rgb), 0.1); }
+.dzr-badge { flex: none; width: 20px; height: 20px; border-radius: 10px 10px 10px 2px; background: var(--text); color: var(--on-ink); font-size: 10px; font-weight: 600; line-height: 20px; text-align: center; }
+.dzr-badge.resolved { background: none; border: 1px solid var(--faint); color: var(--muted); width: 18px; height: 18px; line-height: 18px; }
+.dzr-badge.note { display: inline-flex; align-items: center; justify-content: center; border-radius: 10px; background: var(--inset); color: var(--muted); }
+.dzr-text { flex: 1; min-width: 0; font-size: 13px; line-height: 18px; color: var(--text); white-space: pre-wrap; overflow-wrap: anywhere; }
+.dzr-item.resolved .dzr-text .t { text-decoration: line-through; color: var(--muted); }
+.dzr-meta { margin-top: 2px; font-size: 11px; line-height: 16px; color: var(--faint); white-space: normal; }
+.dzr-item.resolved > .dzr-text > .dzr-meta { color: var(--green-text); }
+.dzr-replies { margin-top: 6px; display: flex; flex-direction: column; gap: 6px; }
+.dzr-reply { padding-left: 10px; border-left: 2px solid var(--border); font-size: 12px; line-height: 17px; color: var(--text-2); }
+.dzr-foot { padding: 12px 16px; display: flex; flex-direction: column; gap: 6px; border-top: 1px solid var(--border); }
+.dzr-foot .reason textarea { flex: 1; min-height: 36px; max-height: 200px; resize: none; overflow-y: auto; border-radius: 8px; border: 1px solid var(--border); padding: 8px 10px; font: inherit; font-size: 13px; line-height: 18px; color: var(--text); background: var(--card); outline: none; box-sizing: border-box; }
+.dzr-foot .reason textarea:focus { border-color: var(--indigo); box-shadow: 0 0 0 3px rgba(var(--indigo-rgb), 0.15); }
+.dzr-row .btn.danger { background: var(--red); border-color: var(--red); color: #fff; }
+
+/* S-47: designs as approved */
+.dz-switch { display: flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+.dz-switch button { padding: 2px 8px; border: 0; background: none; font: inherit; font-size: 12px; line-height: 16px; color: var(--muted); cursor: pointer; }
+.dz-switch button + button { border-left: 1px solid var(--border); }
+.dz-switch button.on { background: var(--text); color: var(--on-ink); font-weight: 500; }
+.dz-lock { display: flex; align-items: center; gap: 6px; font-size: 12px; line-height: 16px; color: var(--muted); }
+.dz-empty { font-size: 12px; color: var(--muted); }
+.dz-changes { display: flex; flex-direction: column; gap: 4px; margin-top: 12px; }
+.dzc { display: flex; align-items: center; gap: 8px; padding: 2px 8px; border-radius: 4px; font-size: 13px; line-height: 18px; color: var(--text); }
+.dzc .op { width: 8px; flex: none; font-family: "Geist Mono", monospace; font-size: 12px; color: var(--muted); }
+.dzc .t { flex: 1; min-width: 0; }
+.dzc.add { background: var(--green-bg); color: var(--green-ink); }
+.dzc.add .op { color: var(--green-text); }
+.dzc.del { background: var(--red-bg); color: var(--red-ink); }
+.dzc.del .op { color: var(--red-text); }
+.dzc svg { color: var(--faint); flex: none; }
+.dzc-meta { font-size: 11px; color: var(--faint); }
+.dzv-lock { display: inline-flex; align-items: center; gap: 5px; padding: 0 8px; border-radius: 999px; background: var(--inset); font-size: 12px; font-weight: 500; line-height: 20px; color: var(--text-2); }
+.dz-changes .dh { padding: 10px 0 4px; font-size: 11px; line-height: 14px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); }
+.dz-changes .fold { padding: 4px 10px; border-radius: 6px; background: var(--inset); font-size: 12px; line-height: 16px; color: var(--muted); }

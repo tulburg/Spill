@@ -1,3 +1,4 @@
+import { Designs } from "./designs";
 import { type DiffLine, lineDiff } from "./diff";
 import { type Actor, type Card, type CheckRun, type FileEntry, type Focus, type Kind, Store, type Version, kindOf } from "./store";
 import { replyTarget, threads } from "./threads";
@@ -187,6 +188,8 @@ export class Board {
     if (args.status === "approved" && card.kind === "spec") {
       const open = this.openQuestions(card);
       if (open.length) throw new Error(`${card.id} has open questions: ${open.join(", ")}. Answer them first.`);
+      // S-46: designs waiting for review hold approval until the design (or a variant) is accepted.
+      if (new Designs(this.store).awaitingReview(card.id)) throw new Error(`${card.id} has designs waiting for review. Accept the design or a variant first.`);
     }
     const from = card.status;
     card.status = args.status;
@@ -199,6 +202,8 @@ export class Board {
     }
     this.store.save(card);
     this.store.log({ actor: this.actor, action: "status", card: card.id, detail: `${from} -> ${args.status}${args.note ? `: ${args.note}` : ""}` });
+    // S-47 (D-35): approval keeps the spec's designs as they were approved.
+    if (args.status === "approved" && card.kind === "spec") new Designs(this.store).snapshot(card.id, this.store.events().length - 1);
     // D-11: the last child spec done approves the parent.
     if (args.status === "done" && card.kind === "spec")
       for (const p of card.links.filter((l) => l.type === "depends_on").map((l) => this.store.all().find((c) => c.id === l.target))) {
@@ -219,6 +224,7 @@ export class Board {
   private autoApprove(card: Card, reason: string): boolean {
     const fresh = this.store.get(card.id);
     if (fresh.kind !== "spec" || !["draft", "discussing"].includes(fresh.status) || this.openQuestions(fresh).length) return false;
+    if (new Designs(this.store).awaitingReview(fresh.id)) return false;
     const from = fresh.status;
     fresh.status = "approved";
     let c = fresh.comments;
@@ -226,6 +232,7 @@ export class Board {
     fresh.comments = `${c}- Auto (${today()}): Approved, ${reason}\n`;
     this.store.save(fresh);
     this.store.log({ actor: "auto", action: "status", card: fresh.id, detail: `${from} -> approved (auto: ${reason})` });
+    new Designs(this.store).snapshot(fresh.id, this.store.events().length - 1);
     return true;
   }
 

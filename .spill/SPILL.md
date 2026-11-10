@@ -134,6 +134,17 @@ The `spill` MCP server exposes these tools (all take the project from the workin
    the board link in the body, blocking the spec. It offers "A. Approve this design" and
    "B. Needs changes"; A approves the spec ("design approved") if nothing else is open, B means
    rework the design and reopen the question.
+   Designs are drawn in Spill and owned by the spec (D-31): once spec designs exist (S-42), draw them
+   with Spill's design tools instead of Paper or OpenDraw, and the review happens in the Designs
+   section of the spec's Overview. Most specs have one design: leave out the variant. Use variants
+   (A, B, C) only to offer several directions; the user compares them side by side on the board.
+   The user reviews there (S-46): pins on a spot, comments, and Accept or Reject per variant (or
+   for the whole design). These reach your inbox (`design_pin`, `design_comment`, `design_review`);
+   `spill_design_feedback` gives every pin's position and note. After changing the design for a
+   pin, reply and resolve it with `spill_design_reply`. A spec whose designs are not accepted
+   (the design or one variant) cannot be approved, like open questions.
+   Approval keeps a read-only copy of the spec's designs (S-47, D-35): later edits never change
+   what was approved, and comparing with that version lists the design changes since.
    A spec with open questions cannot be approved. Read a card's current status right before you
    edit or move it: the user may have just approved it in the app.
 5. **Work visibly.** `spill_set_status S-n active` before writing code, `done` after verifying.

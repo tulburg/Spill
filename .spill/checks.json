@@ -725,5 +725,115 @@
         "note": "The stored rejection reason came back with all 3 lines from /api/board rejections, which spill_rejections also reads"
       }
     ]
+  },
+  "S-44": {
+    "at": "2026-11-09T13:36:01.339Z",
+    "running": false,
+    "results": [
+      {
+        "name": "Two variants created through MCP; files and index under .spill/designs/S-n/",
+        "pass": true,
+        "detail": "Over spill mcp stdio on a scratch board: ab-1.html, ab-2.html, index.json; list groups them as Variant A and B"
+      },
+      {
+        "name": "write_html then read returns the same HTML; update_styles changes only that node",
+        "pass": true,
+        "detail": "Unit tests compare the read-back HTML (ids stripped) and the artboard HTML outside the styled span"
+      },
+      {
+        "name": "spill_design_screenshot PNG matches the HTML",
+        "pass": true,
+        "detail": "WebKit renders of both artboards at 2x (720x480) and of one inner node at 1x (312x192) checked by eye against the HTML"
+      },
+      {
+        "name": "Unit tests cover create, write, read, update, duplicate, delete and list",
+        "pass": true,
+        "detail": "5 new tests; full suite 55 pass"
+      }
+    ]
+  },
+  "S-45": {
+    "at": "2026-11-09T13:53:45.789Z",
+    "running": false,
+    "results": [
+      {
+        "name": "No variants: one row of previews; expand opens the larger canvas",
+        "pass": true,
+        "detail": "Scratch board, headless Chrome: S-44 with 3 plain artboards shows Editor, Editor empty file, Phone in one row; the card chip opens the sheet at Designs; expand opens Editor at Fit"
+      },
+      {
+        "name": "Variants: one preview per variant; opens the whole board side by side",
+        "pass": true,
+        "detail": "S-45 with A and B (2 artboards each): row shows 2 variant previews with counts and Open board; the board shows 2 groups, 4 artboards"
+      },
+      {
+        "name": "A design's CSS does not change Spill's styles",
+        "pass": true,
+        "detail": "Designs carrying a style tag that sets body and .sheet red and every font to Comic Sans: Spill's body, sheet and card styles unchanged; an img onerror payload did not run"
+      },
+      {
+        "name": "Zoom, pan, arrow keys and Esc in the larger canvas",
+        "pass": true,
+        "detail": "Fit 93%, 100%, zoom in 125%, drag moved the view by the drag distance, right arrow 3/4 to 4/4, double-click focuses an artboard, Esc closes the canvas and leaves the sheet open"
+      },
+      {
+        "name": "An MCP edit shows in the open sheet and canvas without a reload",
+        "pass": true,
+        "detail": "Edited ab-1 with the canvas open: the preview and the canvas both showed it within a few seconds, same document, no reload; checked in light and dark"
+      }
+    ]
+  },
+  "S-46": {
+    "at": "2026-11-09T14:10:50.100Z",
+    "running": false,
+    "results": [
+      {
+        "name": "A pin dropped on an artboard reaches the inbox with its number and note, and spill_design_feedback returns its position",
+        "pass": true,
+        "detail": "Scratch board, headless Chrome: clicked the artboard at 82%, typed, Enter. Event design_pin \"pin 1 on ab-1 \\\"Editor\\\" at (701, 400): ...\"; spill_design_feedback lists Pin 1 at (701, 400). Pin stays at (701, 400) and 26px at 129%."
+      },
+      {
+        "name": "Accepting variant A and rejecting B shows both statuses; Approve disabled until one is accepted; a spec without variants is accepted as a whole",
+        "pass": true,
+        "detail": "Approve disabled with \"Accept the design or a variant first\"; B rejected with a two-line reason (Cmd Enter), A accepted; board and Overview show A Accepted, B Rejected; Approve enabled. S-49 (no variants) accepted as one design. Server refuses approval while waiting (unit tests)."
+      },
+      {
+        "name": "Claude's reply and resolve on a pin show in the viewer",
+        "pass": true,
+        "detail": "spill_design_reply on pin 1 (resolve) and comment c-1 while the viewer was open: reply, struck-through resolved pin and grey pin marker appeared without a reload, light and dark."
+      }
+    ]
+  },
+  "S-47": {
+    "at": "2026-11-09T14:53:24.380Z",
+    "running": false,
+    "results": [
+      {
+        "name": "After approval, an edited design leaves the approved version showing the design as it was approved",
+        "pass": true,
+        "detail": "Scratch board: approved S-48 and S-49, then edited A's artboard, added variant C, and wrote \"Edited after approval\" into S-49. The v1 / Approved switch and the read-only viewer show the approved HTML (text absent), statuses and pins as they were; Open current shows the edit. Unit test: snapshot keeps \"Before\" and the unresolved pin."
+      },
+      {
+        "name": "The diff against an approved version lists the design changes",
+        "pass": true,
+        "detail": "Compared with v1: \"Designs since v1\" lists + Variant C added, ~ Variant A edited, and Variant A Accepted -> Waiting after the review was taken back."
+      },
+      {
+        "name": "Snapshots survive a restart and are stored under .spill",
+        "pass": true,
+        "detail": "Stored in .spill/versions/designs/S-n.jsonl with blobs in .spill/versions/designs/blobs/; after restarting the server the same snapshots and version mapping came back and rendered."
+      }
+    ]
+  },
+  "S-42": {
+    "at": "2026-11-09T14:53:38.322Z",
+    "running": false,
+    "results": [
+      {
+        "name": "Each part's checks pass",
+        "pass": true,
+        "detail": "S-44 4/4, S-45 5/5, S-46 3/3, S-47 3/3; 61 unit tests pass."
+      }
+    ]
   }
 }

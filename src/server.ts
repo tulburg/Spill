@@ -1,7 +1,8 @@
-import { existsSync, mkdirSync, readFileSync, watch, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, statSync, watch, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { Board } from "./board";
+import { Designs } from "./designs";
 import type { Store } from "./store";
 
 const UI_DIR = join(import.meta.dir, "..", "ui");
@@ -30,6 +31,36 @@ async function bundle(): Promise<string> {
 // Serves the canvas UI and the board API for one project, with live updates over SSE.
 export async function startServer(store: Store, port = 4747) {
   const clients = new Set<ReadableStreamDefaultController>();
+  // S-45: every spec's artboards, each with v (its file's mtime) so the UI refetches only what changed.
+  const designSummary = () =>
+    Object.fromEntries(
+      new Designs(store).list().map((s) => {
+        // S-47: h is the HTML's hash, to tell which artboards changed since an approved snapshot.
+        const hashes = new Designs(store).htmlHashes(s.spec);
+        return [
+          s.spec,
+          s.artboards.map((a) => {
+            const f = join(store.dir, "designs", s.spec, `${a.id}.html`);
+            return { ...a, v: existsSync(f) ? statSync(f).mtimeMs : 0, h: hashes[a.id] ?? "" };
+          }),
+        ];
+      }),
+    );
+  // S-47: each spec's approved design snapshots, with the index of the version that was approved.
+  const approvedSummary = () =>
+    Object.fromEntries(
+      store
+        .all()
+        .filter((c) => c.kind === "spec")
+        .map((c) => {
+          const vs = store.versions(c.id);
+          const snaps = new Designs(store).snapshots(c.id).map((r) => ({ ...r, version: vs.findLastIndex((v) => (v.seq !== undefined ? v.seq <= r.seq : v.at <= r.at)) }));
+          return [c.id, snaps];
+        })
+        .filter(([, snaps]) => (snaps as unknown[]).length),
+    );
+  // S-46: each spec's review feedback (pins, comments, reviews), for the viewer.
+  const feedbackSummary = () => Object.fromEntries(new Designs(store).list().map((s) => [s.spec, new Designs(store).feedback(s.spec)]));
   let timer: ReturnType<typeof setTimeout> | undefined;
   watch(store.dir, { recursive: true }, () => {
     clearTimeout(timer);
@@ -64,7 +95,31 @@ export async function startServer(store: Store, port = 4747) {
       "/app.css": () => new Response(Bun.file(join(UI_DIR, "app.css"))),
       "/logo.svg": () => new Response(Bun.file(join(UI_DIR, "logo.svg")), { headers: { "content-type": "image/svg+xml" } }),
       "/app.js": async () => new Response(await bundle(), { headers: { "content-type": "text/javascript" } }),
-      "/api/board": () => json({ project: store.config().project, cards: store.all(), focus: store.focus(), checks: store.checks(), files: store.files(), rejections: new Board(store, "user").rejections().map((r) => ({ id: r.card.id, reason: r.reason, at: r.at })), events: store.events().slice(-200), versions: Object.fromEntries(store.all().filter((c) => c.kind === "spec" && store.versions(c.id).length).map((c) => [c.id, new Board(store, "user").versions(c)])), messages: store.events().filter((e) => e.card === "-" && (e.action === "message" || e.action === "reply")), messageState: store.messageState(), root: dirname(store.dir) }),
+      "/api/board": () => json({ project: store.config().project, cards: store.all(), focus: store.focus(), checks: store.checks(), files: store.files(), rejections: new Board(store, "user").rejections().map((r) => ({ id: r.card.id, reason: r.reason, at: r.at })), events: store.events().slice(-200), versions: Object.fromEntries(store.all().filter((c) => c.kind === "spec" && store.versions(c.id).length).map((c) => [c.id, new Board(store, "user").versions(c)])), messages: store.events().filter((e) => e.card === "-" && (e.action === "message" || e.action === "reply")), messageState: store.messageState(), root: dirname(store.dir), designs: designSummary(), feedback: feedbackSummary(), approvedDesigns: approvedSummary() }),
+      // S-45: one artboard's HTML, for the spec viewer's previews and larger canvas.
+      "/api/designs/:spec/:id": (req) => {
+        const { spec, id } = req.params;
+        if (!/^S-\d+$/.test(spec) || !/^ab-\d+$/.test(id)) return new Response("Not found", { status: 404 });
+        const f = join(store.dir, "designs", spec, `${id}.html`);
+        return existsSync(f) ? new Response(Bun.file(f), { headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store" } }) : new Response("Not found", { status: 404 });
+      },
+      // S-46: review a spec's designs: feedback, pins, comments, replies, accept and reject.
+      "/api/designs/:spec/feedback": (req) => {
+        try {
+          return json(new Designs(store, "user").feedback(req.params.spec));
+        } catch (e) {
+          return json({ error: (e as Error).message }, 400);
+        }
+      },
+      // S-47: one approved snapshot of a spec's designs (read only).
+      "/api/designs/:spec/approved/:hash": (req) => {
+        const snap = new Designs(store).readSnapshot(req.params.hash);
+        return snap ? json(snap) : json({ error: "Not found" }, 404);
+      },
+      "/api/designs/:spec/pin": { POST: (req) => act(req, (b) => new Designs(store, "user").pin({ spec: req.params.spec, artboard: b.artboard, x: b.x, y: b.y, text: b.text })) },
+      "/api/designs/:spec/comment": { POST: (req) => act(req, (b) => new Designs(store, "user").note({ spec: req.params.spec, variant: b.variant, text: b.text })) },
+      "/api/designs/:spec/reply": { POST: (req) => act(req, (b) => new Designs(store, "user").reply({ spec: req.params.spec, pin: b.pin, comment: b.comment, text: b.text })) },
+      "/api/designs/:spec/review": { POST: (req) => act(req, (b) => new Designs(store, "user").review({ spec: req.params.spec, variant: b.variant, status: b.status, reason: b.reason })) },
       "/api/stream": () => {
         let ctl: ReadableStreamDefaultController;
         return new Response(

@@ -65,8 +65,8 @@ export function handle(store: Store, msg: Msg): object | undefined {
       const tool = TOOLS.find((t) => t.name === msg.params?.name);
       if (!tool) return fail(-32602, `Unknown tool ${msg.params?.name}`);
       try {
-        const text = tool.run(new Board(store, "claude"), msg.params?.arguments ?? {});
-        return reply({ content: [{ type: "text", text }] });
+        const out = tool.run(new Board(store, "claude"), msg.params?.arguments ?? {});
+        return reply(typeof out === "string" ? { content: [{ type: "text", text: out }] } : out);
       } catch (e) {
         return reply({ content: [{ type: "text", text: (e as Error).message }], isError: true });
       }

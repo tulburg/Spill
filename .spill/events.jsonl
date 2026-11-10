@@ -534,3 +534,139 @@
 {"at":"2026-11-09T13:25:03.534Z","actor":"user","action":"message","card":"-","detail":"Every specs seems to be in the spec lifecycle for spill, can we recategorize these specifications now"}
 {"at":"2026-11-09T13:25:34.631Z","actor":"claude","action":"ask","card":"Q-36","detail":"Recategorize the board into these sections?"}
 {"at":"2026-11-09T13:25:34.640Z","actor":"claude","action":"reply","card":"-","detail":"Proposed a regrouping in Q-36: Spec lifecycle (kept), Canvas and spec viewer, Questions and decisions, Talking to Claude, Summary panel, Desktop app and MCP, Designs, iOS companion, with questions and decisions following their spec. Pick A or B, or write your own grouping, and I will move the cards.","thread":"2026-11-09T13:25:03.534Z"}
+{"at":"2026-11-09T13:26:39.145Z","actor":"user","action":"record","card":"D-31","detail":"answers Q-32: A. Spill becomes the place designs are drawn and reviewed; Paper and OpenDraw are no longer used for spec designs (I update CLAUDE.md and SPILL.md)"}
+{"at":"2026-11-09T13:26:52.872Z","actor":"claude","action":"comment","card":"Q-32","detail":"Done per D-31: CLAUDE.md and SPILL.md now say spec designs are drawn and reviewed in Spill, owned by the spec. Until S-42 ships there is nowhere in Spill to draw, so both say to keep using Paper until then."}
+{"at":"2026-11-09T13:26:57.496Z","actor":"user","action":"record","card":"D-32","detail":"answers Q-31: A. Split into four: (1) design store in .spill plus the MCP design tools, ported from OpenDraw; (2) Designs tab in the spec viewer with isolated renders; (3) review: annotations, comments, accept and reject per variant; (4) designs kept per spec version"}
+{"at":"2026-11-09T13:26:57.505Z","actor":"auto","action":"status","card":"S-42","detail":"draft -> approved (auto: all questions answered)"}
+{"at":"2026-11-09T13:27:01.939Z","actor":"user","action":"status","card":"S-42","detail":"approved -> queued"}
+{"at":"2026-11-09T13:27:33.305Z","actor":"claude","action":"draft_spec","card":"S-44","detail":"Design store and MCP design tools"}
+{"at":"2026-11-09T13:27:33.316Z","actor":"claude","action":"draft_spec","card":"S-45","detail":"Designs tab in the spec viewer"}
+{"at":"2026-11-09T13:27:33.323Z","actor":"claude","action":"draft_spec","card":"S-46","detail":"Design review: annotations, comments, accept and reject"}
+{"at":"2026-11-09T13:27:33.329Z","actor":"claude","action":"draft_spec","card":"S-47","detail":"Designs kept per spec version"}
+{"at":"2026-11-09T13:27:41.837Z","actor":"claude","action":"update","card":"S-42","detail":"body"}
+{"at":"2026-11-09T13:27:41.848Z","actor":"claude","action":"comment","card":"S-42","detail":"Split per D-32 into S-44 to S-47, drafted as parts of this spec. S-42 is the overview now, so there is nothing to build on it directly; it completes when all four parts are done. Approve and press Build on S-44 first, since the others need designs to exist."}
+{"at":"2026-11-09T13:27:41.856Z","actor":"claude","action":"focus","card":"S-44","detail":"discussing S-44, S-45, S-46, S-47; next S-43, Q-33, Q-34, Q-35, Q-36: S-42 split into four parts; approve S-44 first"}
+{"at":"2026-11-09T13:27:43.353Z","actor":"user","action":"redirect","card":"Q-36","detail":"Already answered, use the other decision"}
+{"at":"2026-11-09T13:28:29.912Z","actor":"user","action":"status","card":"S-44","detail":"draft -> approved"}
+{"at":"2026-11-09T13:28:35.595Z","actor":"user","action":"status","card":"S-44","detail":"approved -> queued"}
+{"at":"2026-11-09T13:29:29.914Z","actor":"claude","action":"update","card":"S-7","detail":"section"}
+{"at":"2026-11-09T13:29:29.914Z","actor":"claude","action":"update","card":"Q-4","detail":"section"}
+{"at":"2026-11-09T13:29:29.914Z","actor":"claude","action":"update","card":"D-1","detail":"section"}
+{"at":"2026-11-09T13:29:29.917Z","actor":"claude","action":"update","card":"S-9","detail":"section"}
+{"at":"2026-11-09T13:29:29.920Z","actor":"claude","action":"update","card":"S-10","detail":"section"}
+{"at":"2026-11-09T13:29:29.923Z","actor":"claude","action":"update","card":"S-11","detail":"section"}
+{"at":"2026-11-09T13:29:29.933Z","actor":"claude","action":"update","card":"S-13","detail":"section"}
+{"at":"2026-11-09T13:29:29.933Z","actor":"claude","action":"update","card":"Q-5","detail":"section"}
+{"at":"2026-11-09T13:29:29.934Z","actor":"claude","action":"update","card":"D-4","detail":"section"}
+{"at":"2026-11-09T13:29:29.937Z","actor":"claude","action":"update","card":"S-15","detail":"section"}
+{"at":"2026-11-09T13:29:29.940Z","actor":"claude","action":"update","card":"S-18","detail":"section"}
+{"at":"2026-11-09T13:29:29.944Z","actor":"claude","action":"update","card":"S-22","detail":"section"}
+{"at":"2026-11-09T13:29:29.947Z","actor":"claude","action":"update","card":"S-25","detail":"section"}
+{"at":"2026-11-09T13:29:29.957Z","actor":"claude","action":"update","card":"S-40","detail":"section"}
+{"at":"2026-11-09T13:29:29.957Z","actor":"claude","action":"update","card":"Q-29","detail":"section"}
+{"at":"2026-11-09T13:29:29.957Z","actor":"claude","action":"update","card":"D-29","detail":"section"}
+{"at":"2026-11-09T13:29:29.960Z","actor":"claude","action":"update","card":"S-12","detail":"section"}
+{"at":"2026-11-09T13:29:29.963Z","actor":"claude","action":"update","card":"S-20","detail":"section"}
+{"at":"2026-11-09T13:29:29.967Z","actor":"claude","action":"update","card":"S-24","detail":"section"}
+{"at":"2026-11-09T13:29:29.970Z","actor":"claude","action":"update","card":"S-26","detail":"section"}
+{"at":"2026-11-09T13:29:29.974Z","actor":"claude","action":"update","card":"S-8","detail":"section"}
+{"at":"2026-11-09T13:29:29.976Z","actor":"claude","action":"update","card":"S-23","detail":"section"}
+{"at":"2026-11-09T13:29:29.986Z","actor":"claude","action":"update","card":"S-30","detail":"section"}
+{"at":"2026-11-09T13:29:29.986Z","actor":"claude","action":"update","card":"Q-11","detail":"section"}
+{"at":"2026-11-09T13:29:29.986Z","actor":"claude","action":"update","card":"D-12","detail":"section"}
+{"at":"2026-11-09T13:29:29.990Z","actor":"claude","action":"update","card":"S-28","detail":"section"}
+{"at":"2026-11-09T13:29:30.013Z","actor":"claude","action":"update","card":"S-31","detail":"section"}
+{"at":"2026-11-09T13:29:30.013Z","actor":"claude","action":"update","card":"Q-12","detail":"section"}
+{"at":"2026-11-09T13:29:30.013Z","actor":"claude","action":"update","card":"D-13","detail":"section"}
+{"at":"2026-11-09T13:29:30.013Z","actor":"claude","action":"update","card":"Q-13","detail":"section"}
+{"at":"2026-11-09T13:29:30.013Z","actor":"claude","action":"update","card":"D-14","detail":"section"}
+{"at":"2026-11-09T13:29:30.014Z","actor":"claude","action":"update","card":"Q-14","detail":"section"}
+{"at":"2026-11-09T13:29:30.014Z","actor":"claude","action":"update","card":"D-15","detail":"section"}
+{"at":"2026-11-09T13:29:30.017Z","actor":"claude","action":"update","card":"S-16","detail":"section"}
+{"at":"2026-11-09T13:29:30.020Z","actor":"claude","action":"update","card":"S-17","detail":"section"}
+{"at":"2026-11-09T13:29:30.035Z","actor":"claude","action":"update","card":"S-36","detail":"section"}
+{"at":"2026-11-09T13:29:30.035Z","actor":"claude","action":"update","card":"Q-21","detail":"section"}
+{"at":"2026-11-09T13:29:30.035Z","actor":"claude","action":"update","card":"D-22","detail":"section"}
+{"at":"2026-11-09T13:29:30.035Z","actor":"claude","action":"update","card":"Q-24","detail":"section"}
+{"at":"2026-11-09T13:29:30.035Z","actor":"claude","action":"update","card":"D-25","detail":"section"}
+{"at":"2026-11-09T13:29:30.042Z","actor":"claude","action":"update","card":"S-38","detail":"section"}
+{"at":"2026-11-09T13:29:30.042Z","actor":"claude","action":"update","card":"Q-28","detail":"section"}
+{"at":"2026-11-09T13:29:30.048Z","actor":"claude","action":"update","card":"S-39","detail":"section"}
+{"at":"2026-11-09T13:29:30.064Z","actor":"claude","action":"update","card":"S-42","detail":"section"}
+{"at":"2026-11-09T13:29:30.064Z","actor":"claude","action":"update","card":"Q-31","detail":"section"}
+{"at":"2026-11-09T13:29:30.064Z","actor":"claude","action":"update","card":"D-32","detail":"section"}
+{"at":"2026-11-09T13:29:30.064Z","actor":"claude","action":"update","card":"Q-32","detail":"section"}
+{"at":"2026-11-09T13:29:30.064Z","actor":"claude","action":"update","card":"D-31","detail":"section"}
+{"at":"2026-11-09T13:29:30.068Z","actor":"claude","action":"update","card":"S-44","detail":"section"}
+{"at":"2026-11-09T13:29:30.071Z","actor":"claude","action":"update","card":"S-45","detail":"section"}
+{"at":"2026-11-09T13:29:30.074Z","actor":"claude","action":"update","card":"S-46","detail":"section"}
+{"at":"2026-11-09T13:29:30.079Z","actor":"claude","action":"update","card":"S-47","detail":"section"}
+{"at":"2026-11-09T13:29:30.091Z","actor":"claude","action":"update","card":"S-43","detail":"section"}
+{"at":"2026-11-09T13:29:30.091Z","actor":"claude","action":"update","card":"Q-33","detail":"section"}
+{"at":"2026-11-09T13:29:30.091Z","actor":"claude","action":"update","card":"Q-34","detail":"section"}
+{"at":"2026-11-09T13:29:30.092Z","actor":"claude","action":"update","card":"Q-35","detail":"section"}
+{"at":"2026-11-09T13:29:39.951Z","actor":"claude","action":"status","card":"Q-36","detail":"open -> dropped: Dropped per your redirect: the recategorize request was already your decision, so this should not have been a question. Applied grouping A: added sections SEC-2 Canvas and spec viewer, SEC-3 Questions and decisions, SEC-4 Talking to Claude, SEC-5 Summary panel, SEC-6 Desktop app and MCP, SEC-7 Designs, SEC-8 iOS companion. Lifecycle specs stay in SEC-1. Questions and decisions moved with their spec. Say if a card belongs elsewhere."}
+{"at":"2026-11-09T13:30:14.826Z","actor":"user","action":"status","card":"S-45","detail":"draft -> rejected: Design should be a section in the overview. With previews and with an expand button on each to view in a larger canvas. Its also possible to view the enter artboard in a bigger canvas in case there’s need to compare two artboards"}
+{"at":"2026-11-09T13:30:17.127Z","actor":"claude","action":"status","card":"S-44","detail":"queued -> active"}
+{"at":"2026-11-09T13:30:43.859Z","actor":"claude","action":"update","card":"S-45","detail":"title, body"}
+{"at":"2026-11-09T13:30:43.870Z","actor":"claude","action":"status","card":"S-45","detail":"rejected -> discussing: Redrafted from your reason: designs are now a section in the Overview with previews, an expand button per artboard, and a button to open all artboards side by side in the larger canvas for comparing. I read \"enter artboard\" as \"entire set of artboards\"; say if you meant something else."}
+{"at":"2026-11-09T13:31:10.762Z","actor":"user","action":"status","card":"S-46","detail":"draft -> approved"}
+{"at":"2026-11-09T13:31:12.159Z","actor":"user","action":"status","card":"S-46","detail":"approved -> queued"}
+{"at":"2026-11-09T13:31:14.129Z","actor":"user","action":"status","card":"S-45","detail":"discussing -> approved"}
+{"at":"2026-11-09T13:31:15.065Z","actor":"user","action":"status","card":"S-45","detail":"approved -> queued"}
+{"at":"2026-11-09T13:31:36.630Z","actor":"user","action":"status","card":"S-47","detail":"draft -> approved"}
+{"at":"2026-11-09T13:31:38.097Z","actor":"user","action":"status","card":"S-47","detail":"approved -> queued"}
+{"at":"2026-11-09T13:34:06.915Z","actor":"claude","action":"comment","card":"S-44","detail":"Reqs 1-3, 5-7 done"}
+{"at":"2026-11-09T13:36:01.330Z","actor":"claude","action":"files","card":"S-44","detail":"new src/designs.ts, new src/render.swift, new src/render.ts, changed src/tools.ts, changed src/mcp.ts, changed test/spill.test.ts"}
+{"at":"2026-11-09T13:36:01.340Z","actor":"claude","action":"checks","card":"S-44","detail":"4 of 4 passed"}
+{"at":"2026-11-09T13:36:01.345Z","actor":"claude","action":"comment","card":"S-44","detail":"Req 4 done. Screenshots use headless WebKit through a small Swift renderer (src/render.swift), compiled once into ~/.spill/bin on first use (about 5 seconds), so no new package dependency. Arguments use plain JSON schema, no zod."}
+{"at":"2026-11-09T13:36:01.354Z","actor":"claude","action":"status","card":"S-44","detail":"active -> done"}
+{"at":"2026-11-09T13:36:12.524Z","actor":"claude","action":"status","card":"S-45","detail":"queued -> active: Building S-45 before S-46 (queued first): S-46's annotations and accept/reject sit on the viewer this spec makes. Drawing the design first."}
+{"at":"2026-11-09T13:36:12.529Z","actor":"claude","action":"focus","card":"S-45","detail":"discussing S-45; next S-46, S-47: S-44 done; drawing the Designs section and larger canvas for S-45"}
+{"at":"2026-11-09T13:36:20.752Z","actor":"claude","action":"status","card":"S-45","detail":"active -> discussing: Paused before drawing: Paper is not running, and designs are drawn in Paper until S-42 ships. I pick this up as soon as Paper is open."}
+{"at":"2026-11-09T13:36:20.763Z","actor":"claude","action":"focus","card":"S-45","detail":"discussing S-45; next S-46, S-47: S-44 done; S-45 waits on Paper being open to draw its design"}
+{"at":"2026-11-09T13:37:01.119Z","actor":"user","action":"status","card":"S-45","detail":"discussing -> approved"}
+{"at":"2026-11-09T13:37:03.504Z","actor":"user","action":"status","card":"S-45","detail":"approved -> queued"}
+{"at":"2026-11-09T13:38:07.630Z","actor":"claude","action":"status","card":"S-45","detail":"queued -> active"}
+{"at":"2026-11-09T13:40:18.400Z","actor":"claude","action":"ask","card":"Q-37","detail":"Design approval: designs in the spec overview (S-45)"}
+{"at":"2026-11-09T13:40:21.293Z","actor":"claude","action":"focus","card":"S-45","detail":"discussing S-45, Q-37; next S-46, S-47: S-45 design drawn in Paper; waiting on Q-37 sign-off"}
+{"at":"2026-11-09T13:45:16.294Z","actor":"user","action":"redirect","card":"Q-37","detail":"Its not every design that will have variants, this should also be clear in the instruction as well. In the spec details viewer, the design section can only be a single row. If there are variants, then its best to launch the entire board so variants can be viewed side-by-side. So, we should have two different view of the section based on either there is a variant or not (only if this is necessary though)"}
+{"at":"2026-11-09T13:45:38.189Z","actor":"claude","action":"update","card":"S-45","detail":"body"}
+{"at":"2026-11-09T13:47:08.471Z","actor":"claude","action":"update","card":"Q-37","detail":"body"}
+{"at":"2026-11-09T13:47:08.478Z","actor":"claude","action":"comment","card":"Q-37","detail":"Changed from your note: the sheet's Designs section is one row in both cases. With no variants it shows the artboards, each with expand. With variants it shows one preview per variant, and those open the whole board side by side. Variants are now optional in the design tools: artboards made without one are ungrouped, and the tool descriptions and SPILL.md say to use variants only when offering several directions. S-45's requirements are updated to match."}
+{"at":"2026-11-09T13:47:12.446Z","actor":"claude","action":"files","card":"S-45","detail":"changed src/designs.ts, changed src/tools.ts, changed test/spill.test.ts, changed .spill/SPILL.md"}
+{"at":"2026-11-09T13:48:02.528Z","actor":"user","action":"record","card":"D-33","detail":"answers Q-37: A. Approve this design"}
+{"at":"2026-11-09T13:53:45.767Z","actor":"claude","action":"update","card":"S-45","detail":"body"}
+{"at":"2026-11-09T13:53:45.779Z","actor":"claude","action":"comment","card":"S-45","detail":"Req 5 changed from a sandboxed iframe to a shadow root. The board redraws on every change, and a redraw reloads an iframe, so previews would flash each time Claude acted. A shadow root gives the same CSS isolation both ways and survives redraws. Scripts, frames and on* handlers are stripped before a design is shown, so nothing in it runs (checked with an onerror payload). Reqs 1-9 done."}
+{"at":"2026-11-09T13:53:45.785Z","actor":"claude","action":"files","card":"S-45","detail":"changed ui/main.ts, changed ui/app.css, changed src/server.ts"}
+{"at":"2026-11-09T13:53:45.789Z","actor":"claude","action":"checks","card":"S-45","detail":"5 of 5 passed"}
+{"at":"2026-11-09T13:53:45.795Z","actor":"claude","action":"status","card":"S-45","detail":"active -> done"}
+{"at":"2026-11-09T13:54:10.653Z","actor":"claude","action":"status","card":"S-46","detail":"queued -> active"}
+{"at":"2026-11-09T13:54:10.665Z","actor":"claude","action":"update","card":"S-46","detail":"body"}
+{"at":"2026-11-09T13:54:10.672Z","actor":"claude","action":"comment","card":"S-46","detail":"Updated for D-33 (variants are optional): the comment thread, Accept and Reject apply to the whole design when a spec has no variants, and to each variant when it does. Nothing else changed. Drawing the design next."}
+{"at":"2026-11-09T13:54:10.678Z","actor":"claude","action":"focus","card":"S-46","detail":"discussing S-46; next S-47: S-45 done; drawing the S-46 review design"}
+{"at":"2026-11-09T13:56:21.292Z","actor":"claude","action":"ask","card":"Q-38","detail":"Design approval: design review (S-46)"}
+{"at":"2026-11-09T13:56:25.296Z","actor":"claude","action":"focus","card":"S-46","detail":"discussing S-46, Q-38; next S-47: S-45 done; S-46 design drawn, waiting on Q-38 sign-off"}
+{"at":"2026-11-09T13:57:23.060Z","actor":"user","action":"record","card":"D-34","detail":"answers Q-38: A. Approve this design"}
+{"at":"2026-11-09T14:10:50.094Z","actor":"claude","action":"files","card":"S-46","detail":"changed src/designs.ts, changed src/board.ts, changed src/server.ts, changed src/tools.ts, changed ui/main.ts, changed ui/app.css, changed test/spill.test.ts, changed .spill/SPILL.md"}
+{"at":"2026-11-09T14:10:50.101Z","actor":"claude","action":"checks","card":"S-46","detail":"3 of 3 passed"}
+{"at":"2026-11-09T14:10:50.106Z","actor":"claude","action":"comment","card":"S-46","detail":"Reqs 1-7 done. Feedback lives in .spill/designs/S-n/feedback.json; an artboard's status now comes from the review of its variant (or of the whole design). New MCP tools: spill_design_feedback and spill_design_reply (reply, and resolve for pins). Inbox actions: design_pin, design_comment, design_review. Approval (manual and auto) waits while a spec has designs and none is accepted. In the viewer: click to pin (one artboard), click a variant to review it (whole board), Undo accept takes an acceptance back. 59 tests pass."}
+{"at":"2026-11-09T14:10:50.111Z","actor":"claude","action":"status","card":"S-46","detail":"active -> done"}
+{"at":"2026-11-09T14:11:22.851Z","actor":"claude","action":"status","card":"S-47","detail":"queued -> active"}
+{"at":"2026-11-09T14:13:10.480Z","actor":"claude","action":"ask","card":"Q-39","detail":"When is a version's design snapshot taken?"}
+{"at":"2026-11-09T14:13:10.493Z","actor":"claude","action":"ask","card":"Q-40","detail":"Design approval: designs per spec version (S-47)"}
+{"at":"2026-11-09T14:13:13.263Z","actor":"claude","action":"focus","card":"S-47","detail":"discussing S-47, Q-39, Q-40: S-47 is drawn; waiting on the snapshot timing (Q-39) and the design sign-off (Q-40)"}
+{"at":"2026-11-09T14:42:57.876Z","actor":"user","action":"redirect","card":"Q-39","detail":"Only at approval. Edit of the specs could possibly lead to design updates. That is not the design that can be approved since its already outdated. An approved design is the real version of the design of the spec."}
+{"at":"2026-11-09T14:43:08.932Z","actor":"claude","action":"record","card":"D-35","detail":"answers Q-39: Design snapshots are taken only at approval"}
+{"at":"2026-11-09T14:43:15.219Z","actor":"claude","action":"update","card":"S-47","detail":"body"}
+{"at":"2026-11-09T14:43:15.228Z","actor":"claude","action":"comment","card":"S-47","detail":"Updated for D-35 (snapshots only at approval): req 1 now takes the design snapshot when the spec is approved, not on text edits; reqs 2 and 3 compare against approved versions; check 1 reworded to match. The drawing on Q-40 still applies; only versions that were approved show the Now / version switch."}
+{"at":"2026-11-09T14:45:08.639Z","actor":"user","action":"record","card":"D-36","detail":"answers Q-40: A. Approve this design"}
+{"at":"2026-11-09T14:53:24.370Z","actor":"claude","action":"files","card":"S-47","detail":"changed src/designs.ts, changed src/board.ts, changed src/server.ts, changed ui/main.ts, changed ui/app.css, changed test/spill.test.ts, changed .spill/SPILL.md"}
+{"at":"2026-11-09T14:53:24.381Z","actor":"claude","action":"checks","card":"S-47","detail":"3 of 3 passed"}
+{"at":"2026-11-09T14:53:24.387Z","actor":"claude","action":"comment","card":"S-47","detail":"Reqs 1-4 done. Approval (by the user or auto) snapshots the spec's designs, statuses, pins and comments into .spill/versions/designs (one blob per distinct state); text edits take none (D-35). The board maps each snapshot to the version approved at that moment (or \"Approved\" when the spec has no text versions yet). Overview: a Now / vN switch in Designs, defaulting to the snapshot of the version being compared, and \"Designs since vN\" after the text diff. The larger canvas opens a snapshot read only with \"Open current\". 61 tests pass."}
+{"at":"2026-11-09T14:53:24.392Z","actor":"claude","action":"status","card":"S-47","detail":"active -> done"}
+{"at":"2026-11-09T14:53:32.078Z","actor":"claude","action":"status","card":"S-42","detail":"queued -> active"}
+{"at":"2026-11-09T14:53:38.322Z","actor":"claude","action":"checks","card":"S-42","detail":"1 of 1 passed"}
+{"at":"2026-11-09T14:53:38.326Z","actor":"claude","action":"comment","card":"S-42","detail":"Reqs 1 done: S-44, S-45, S-46 and S-47 are done with their checks passing. CLAUDE.md no longer says to draw in Paper until S-42 ships; spec designs are now drawn with the spill_design tools."}
+{"at":"2026-11-09T14:53:38.330Z","actor":"claude","action":"status","card":"S-42","detail":"active -> done"}
+{"at":"2026-11-09T14:53:43.008Z","actor":"claude","action":"focus","card":"Q-33","detail":"discussing Q-33, Q-34, Q-35; next S-43: Designs work (S-42) is done; the iOS companion waits on these three questions"}

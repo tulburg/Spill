@@ -26,7 +26,7 @@ Prose (chat replies, commit messages, PR text, markdown, comments):
 - Work directly on `main`: no feature branches, worktrees, or pull requests. Commit only when asked.
 - Match the style of the code you're editing.
 - Verify a change by running it (tests, the app, the browser), not by reading it.
-- UI design changes are drawn in Paper first (file "Spill", page "Work board v2"), then built.
+- UI design changes are drawn first, then built. Spec designs are drawn and reviewed in Spill itself, owned by the spec (D-31, S-42); Paper and OpenDraw are no longer used for them. Draw them with the spill_design tools on the spec.
 - Test Approve and Reject on a copy of the board (`.spill/` copied to a scratch folder, served on
   another port), never on the real board.
 
