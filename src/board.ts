@@ -1,6 +1,6 @@
 import { Designs } from "./designs";
 import { type DiffLine, lineDiff } from "./diff";
-import { type Actor, type Card, type CheckRun, type FileEntry, type Focus, type Kind, Store, type Version, kindOf } from "./store";
+import { type Actor, type Card, type CheckRun, type FileEntry, type Focus, type TodoList, type Kind, Store, type Version, kindOf } from "./store";
 import { replyTarget, threads } from "./threads";
 import { pendingUpdate } from "./updates";
 
@@ -202,6 +202,8 @@ export class Board {
     }
     this.store.save(card);
     this.store.log({ actor: this.actor, action: "status", card: card.id, detail: `${from} -> ${args.status}${args.note ? `: ${args.note}` : ""}` });
+    // S-48 req 2: each build (first or update) starts with an empty todo list.
+    if (args.status === "active" && card.kind === "spec") this.store.saveTodos(card.id, null);
     // S-47 (D-35): approval keeps the spec's designs as they were approved.
     if (args.status === "approved" && card.kind === "spec") new Designs(this.store).snapshot(card.id, this.store.events().length - 1);
     // D-11: the last child spec done approves the parent.
@@ -480,6 +482,20 @@ export class Board {
 
   // Set the spotlight (S-18). Every ID must exist; clear removes it.
   // S-13 / D-4: Claude records the result of running a spec's acceptance checks.
+  // S-48: Claude's todo list for the active build, replaced whole on each call. Not logged: it
+  // shows only as the card's todo progress bar (req 6).
+  todos(args: { id: string; items: { text: string; done?: boolean }[] }): TodoList {
+    const card = this.store.get(args.id);
+    if (card.kind !== "spec") throw new Error(`${card.id} is not a spec`);
+    if (card.status !== "active") throw new Error(`${card.id} is ${card.status}; a todo list is for a spec you are building (active)`);
+    if (!Array.isArray(args.items) || !args.items.length) throw new Error("Pass the full todo list: items, each with text and done");
+    const items = args.items.map((x) => ({ text: String(x?.text ?? "").trim(), done: x?.done === true }));
+    if (items.some((x) => !x.text)) throw new Error("Each todo needs text");
+    const list: TodoList = { at: new Date().toISOString(), items };
+    this.store.saveTodos(card.id, list);
+    return list;
+  }
+
   checks(args: { id: string; running?: boolean; results?: CheckRun["results"] }): CheckRun {
     const card = this.store.get(args.id);
     if (card.kind !== "spec") throw new Error(`${card.id} is not a spec`);

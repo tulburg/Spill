@@ -466,6 +466,12 @@ body {
 .strip .item.build:not(.done-check) { position: relative; overflow: hidden; }
 .strip .item.build:not(.done-check)::after { background: linear-gradient(100deg, transparent 30%, rgba(var(--ink-rgb), 0.07) 50%, transparent 70%); }
 @keyframes livesheen { to { transform: translateX(100%); } }
+/* S-48: todos (75%) and requirements (25%) on one line, 4px apart. */
+.prog.split .halves { display: flex; gap: 4px; }
+.prog.split .half { min-width: 0; }
+.prog.split .half.todo { flex: 3; }
+.prog.split .half.reqs { flex: 1; }
+.prog.split .n.none { font-family: inherit; color: var(--muted); }
 .prog.compact { flex-direction: row; align-items: center; gap: 8px; padding: 0; background: none; }
 .prog.compact .bar { flex: 1; height: 3px; background: var(--border); }
 .prog.compact .bar i { background: var(--text); }
@@ -554,7 +560,8 @@ button.opt:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(var(--amber
 body.sheet-open #canvas { right: 572px; }
 .card[data-id] { cursor: pointer; }
 .card.selected { outline: 2px solid var(--indigo); outline-offset: 4px; }
-.sheet { position: fixed; top: 12px; right: 12px; bottom: 12px; width: 548px; z-index: 30; display: flex; flex-direction: column; background: var(--card); border: 1px solid var(--border); border-radius: 16px; box-shadow: 0 12px 40px rgba(var(--shadow-rgb), 0.1); overflow: hidden; animation: sheetin 0.18s ease-out; }
+/* The sheet wraps its content, up to the window height; past that the body scrolls. */
+.sheet { position: fixed; top: 12px; right: 12px; max-height: calc(100vh - 24px); width: 548px; z-index: 30; display: flex; flex-direction: column; background: var(--card); border: 1px solid var(--border); border-radius: 16px; box-shadow: 0 12px 40px rgba(var(--shadow-rgb), 0.1); overflow: hidden; animation: sheetin 0.18s ease-out; }
 .sheet.stay { animation: none; }
 @keyframes sheetin { from { transform: translateX(16px); opacity: 0; } }
 .sheet-head { padding: 20px 24px 0; display: flex; flex-direction: column; gap: 10px; }
@@ -579,7 +586,7 @@ body.sheet-open #canvas { right: 572px; }
 .tab span { margin-left: 4px; color: var(--faint); }
 .tab:hover { color: var(--text); }
 .tab.on { color: var(--text); font-weight: 500; border-bottom-color: var(--text); }
-.sheet-body { flex: 1; overflow-y: auto; padding: 20px 24px 24px; }
+.sheet-body { flex: 0 1 auto; min-height: 0; overflow-y: auto; padding: 20px 24px 24px; }
 .md { font-size: 14px; line-height: 22px; color: var(--text); }
 .md h4 { margin: 20px 0 8px; font-size: 11px; line-height: 16px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
 .md h4:first-child { margin-top: 0; }
@@ -1052,6 +1059,7 @@ button.fix:disabled { border-color: var(--border); color: var(--faint); cursor: 
 
 .dzv-scrim { position: fixed; inset: 0; z-index: 50; background: rgba(var(--shadow-rgb), 0.18); display: flex; padding: 24px; animation: dzvin 0.14s ease-out; }
 @keyframes dzvin { from { opacity: 0; } }
+.dzv-scrim.stay { animation: none; }
 .dzv { flex: 1; display: flex; flex-direction: column; background: var(--card); border: 1px solid var(--border); border-radius: 16px; box-shadow: 0 16px 48px rgba(var(--shadow-rgb), 0.18); overflow: hidden; }
 .dzv-bar { height: 48px; flex: none; display: flex; align-items: center; gap: 10px; padding: 0 12px 0 16px; border-bottom: 1px solid var(--border); }
 .dzv-id { font-family: "Geist Mono", monospace; font-size: 12px; color: var(--text-2); }
@@ -1081,10 +1089,13 @@ button.fix:disabled { border-color: var(--border); color: var(--faint); cursor: 
 /* S-46: design review in the larger canvas */
 .dzv-body { flex: 1; min-height: 0; display: flex; position: relative; }
 .dzv-body .dzv-stage { flex: 1; }
-.dzv-stage.pinning .dzv-ab { cursor: crosshair; }
+/* Comment cursor: a pin with a plus, its tail (bottom left) is the spot the pin lands on. */
+.dzv-stage.pinning .dzv-ab, .shift-pin .dzv-stage.can-pin:not(.dragging) .dzv-ab { cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='26' height='26' viewBox='0 0 26 26'%3E%3Cpath d='M2 24V12A10 10 0 1 1 12 22H4Z' fill='%2318181b' stroke='%23fff' stroke-width='2' stroke-linejoin='round'/%3E%3Cpath d='M12 8v8M8 12h8' stroke='%23fff' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E") 2 24, crosshair; }
 .dzv-back { display: inline-flex; align-items: center; gap: 6px; margin-left: 4px; padding: 4px 10px; border: 1px solid var(--border); border-radius: 8px; background: none; font: inherit; font-size: 12px; color: var(--text-2); cursor: pointer; }
 .dzv-back:hover { background: var(--canvas); color: var(--text); }
 .dzv-ab { position: relative; }
+/* A design resets inherited styles (all: initial), so hand it the viewer's cursor explicitly. */
+.dzv-ab .dz, .dz-thumb .dz { cursor: inherit; }
 .dzv-group.sel .dzv-set { outline: 6px solid var(--indigo); outline-offset: 16px; border-radius: 4px; }
 .dzv-glabel .dzr-pill { font-size: 22px; padding: 4px 12px; border-radius: 8px; }
 .dzv-glabel .dzr-pill svg { width: 20px; height: 20px; }

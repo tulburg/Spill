@@ -346,15 +346,37 @@ describe("mcp", () => {
   const call = (name: string, args: object = {}) =>
     handle(store, { jsonrpc: "2.0", id: 1, method: "tools/call", params: { name, arguments: args } }) as any;
 
-  test("initialize and list the 27 tools", () => {
+  test("initialize and list the 28 tools", () => {
     const init = handle(store, { jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2025-06-18" } }) as any;
     expect(init.result.serverInfo.name).toBe("spill");
     const list = handle(store, { jsonrpc: "2.0", id: 2, method: "tools/list" }) as any;
     expect(list.result.tools.map((t: any) => t.name)).toEqual([
       "spill_board", "spill_get", "spill_ask", "spill_draft_spec", "spill_update",
-      "spill_set_status", "spill_comment", "spill_link", "spill_unlink", "spill_record", "spill_files", "spill_propose_replace", "spill_rejections", "spill_focus", "spill_checks", "spill_reply", "spill_inbox",
+      "spill_set_status", "spill_comment", "spill_link", "spill_unlink", "spill_record", "spill_files", "spill_propose_replace", "spill_rejections", "spill_focus", "spill_checks", "spill_todos", "spill_reply", "spill_inbox",
       "spill_design_list", "spill_design_create_artboard", "spill_design_write_html", "spill_design_read", "spill_design_update_styles", "spill_design_duplicate", "spill_design_delete", "spill_design_screenshot", "spill_design_feedback", "spill_design_reply",
     ]);
+  });
+
+  test("todo list: only while active, replaced whole, not logged, cleared on each new build (S-48)", () => {
+    const c = claude.draftSpec({ title: "a", body: "## Requirements\n1. one\n2. two" });
+    expect(call("spill_todos", { id: c.id, items: [{ text: "x" }] }).result.isError).toBe(true);
+    user.setStatus({ id: c.id, status: "approved" }), user.build({ id: c.id });
+    claude.setStatus({ id: c.id, status: "active" });
+    const before = store.events().length;
+    const r = call("spill_todos", { id: c.id, items: [{ text: "Store", done: true }, { text: "Tool" }, { text: "UI" }, { text: "Tests" }] });
+    expect(r.result.content[0].text).toBe(`${c.id}: 1 of 4 todos done`);
+    expect(store.events().length).toBe(before);
+    expect(store.todos()[c.id].items.map((x) => x.done)).toEqual([true, false, false, false]);
+    expect(call("spill_todos", { id: c.id, items: [{ text: "Store", done: true }, { text: "" }] }).result.isError).toBe(true);
+    claude.comment({ id: c.id, text: "Req 1 done" });
+    claude.setStatus({ id: c.id, status: "done" });
+    // An update build starts the todo list again; met requirements are in the comments and stay.
+    store.saveTodos(c.id, { at: "x", items: [{ text: "old", done: true }] });
+    user.setStatus({ id: c.id, status: "discussing" });
+    user.setStatus({ id: c.id, status: "approved" }), user.build({ id: c.id });
+    claude.setStatus({ id: c.id, status: "active" });
+    expect(store.todos()[c.id]).toBeUndefined();
+    expect(store.get(c.id).comments).toContain("Req 1 done");
   });
 
   test("check results are stored per spec and logged (S-13)", () => {
@@ -730,9 +752,31 @@ describe("designs", () => {
     expect(call("spill_design_reply", { spec: "S-1", pin: 1, text: "Made it 32px", resolve: true })).toBe("Replied to and resolved pin 1");
     expect(call("spill_design_reply", { spec: "S-1", comment: "c-1", text: "Lightened it" })).toBe("Replied to comment c-1");
     const after = call("spill_design_feedback", { spec: "S-1" });
-    expect(after).toContain("Pin 1 (resolved)");
-    expect(after).toContain("    You: Made it 32px");
+    expect(after).not.toContain("Pin 1");
     expect(after).toContain("    You: Lightened it");
+    expect(after).toContain("1 open note, 1 resolved.");
+  });
+
+  test("review: Claude resolves comments too; resolved notes leave the feedback list; only Claude resolves", () => {
+    const a = newId(call("spill_design_create_artboard", { spec: "S-1", title: "Home", styles: { width: 400, height: 300 } }));
+    const u = new Designs(store, "user");
+    u.pin({ spec: "S-1", artboard: a, x: 10, y: 10, text: "Move this" });
+    u.note({ spec: "S-1", text: "Warmer colors" });
+    expect(() => u.reply({ spec: "S-1", comment: "c-1", resolve: true })).toThrow(/Only Claude resolves/);
+    expect(call("spill_design_reply", { spec: "S-1", comment: "c-1", text: "Warmed the palette", resolve: true })).toBe("Replied to and resolved comment c-1");
+    let fb = call("spill_design_feedback", { spec: "S-1" });
+    expect(fb).not.toContain("Warmer colors");
+    expect(fb).toContain("Pin 1 on");
+    expect(fb).toContain("1 open note, 1 resolved.");
+    expect(call("spill_design_reply", { spec: "S-1", pin: 1, resolve: true })).toBe("Resolved pin 1");
+    fb = call("spill_design_feedback", { spec: "S-1" });
+    expect(fb).toContain("0 open notes, 2 resolved.");
+    // Kept in the file (for approved snapshots), just marked resolved.
+    const kept = new Designs(store).feedback("S-1");
+    expect(kept.notes[0].resolved).toBeTruthy();
+    expect(kept.pins[0].resolved).toBeTruthy();
+    // A new pin can go on the same spot.
+    expect(u.pin({ spec: "S-1", artboard: a, x: 10, y: 10, text: "Again" }).n).toBe(2);
   });
 
   test("review: accept and reject per variant; approval waits for an accepted design; nothing is deleted", () => {

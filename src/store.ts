@@ -150,6 +150,12 @@ export interface FileEntry {
   change: "new" | "changed" | "removed";
 }
 
+// S-48: Claude's todo list for the build in progress. Shown only as the card's todo progress bar.
+export interface TodoList {
+  at: string;
+  items: { text: string; done: boolean }[];
+}
+
 export interface CheckRun {
   at: string;
   running: boolean;
@@ -293,6 +299,20 @@ export class Store {
     const all = this.files();
     all[id] = list;
     writeFileSync(join(this.dir, "files.json"), JSON.stringify(all, null, 2) + "\n");
+  }
+
+  todos(): Record<string, TodoList> {
+    const p = join(this.dir, "todos.json");
+    return existsSync(p) ? JSON.parse(readFileSync(p, "utf8")) : {};
+  }
+
+  // null clears a spec's list (a new build starts at 0).
+  saveTodos(id: string, list: TodoList | null): void {
+    const all = this.todos();
+    if (list) all[id] = list;
+    else if (!(id in all)) return;
+    else delete all[id];
+    writeFileSync(join(this.dir, "todos.json"), JSON.stringify(all, null, 2) + "\n");
   }
 
   checks(): Record<string, CheckRun> {

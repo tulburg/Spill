@@ -105,6 +105,7 @@ The `spill` MCP server exposes these tools (all take the project from the workin
 | `spill_record`       | Record a `D-n` decision and close the question it answers.             |
 | `spill_rejections`   | The rejection queue: rejected specs still waiting on you, with reasons; `resolve` one to leave it rejected. |
 | `spill_focus`        | Set the spotlight: cards being discussed now and cards up next.        |
+| `spill_todos`        | Your todo list for the active build (the full list each call); fills the card's todo progress bar. |
 | `spill_checks`       | Record a spec's acceptance check results (`running: true` first, then `results`) so its card shows them. |
 | `spill_reply`        | Answer a board-level message (inbox action `message`); `thread` picks an older thread. |
 | `spill_inbox`        | List what changed since your last call: answers, new user questions, approvals, rejections, messages. |
@@ -140,16 +141,23 @@ The `spill` MCP server exposes these tools (all take the project from the workin
    (A, B, C) only to offer several directions; the user compares them side by side on the board.
    The user reviews there (S-46): pins on a spot, comments, and Accept or Reject per variant (or
    for the whole design). These reach your inbox (`design_pin`, `design_comment`, `design_review`);
-   `spill_design_feedback` gives every pin's position and note. After changing the design for a
-   pin, reply and resolve it with `spill_design_reply`. A spec whose designs are not accepted
+   `spill_design_feedback` gives every open pin's position and note, open comments, and a count
+   of resolved ones. Work through the open notes: change the design for each one, then reply with
+   what changed and resolve it in the same `spill_design_reply` call (`resolve: true`, for pins and
+   comments alike). Resolving clears the note from the user's view, so the spot is free for new
+   pins; only you resolve. Leave a note open only when you need the user's answer, and reply with
+   the question. A spec whose designs are not accepted
    (the design or one variant) cannot be approved, like open questions.
    Approval keeps a read-only copy of the spec's designs (S-47, D-35): later edits never change
    what was approved, and comparing with that version lists the design changes since.
    A spec with open questions cannot be approved. Read a card's current status right before you
    edit or move it: the user may have just approved it in the app.
 5. **Work visibly.** `spill_set_status S-n active` before writing code, `done` after verifying.
-   Comment on the card with what changed and where ("Req 2 done" or "Reqs 1-3 done" moves its
-   progress bar). Record each file you create or change with `spill_files`. Run the
+   Right after setting it active, record your todo list for this build with `spill_todos` (every
+   item, each with `done`), and send the full list again as you finish items (S-48). It fills the
+   left 75% of the card's progress bar; each new build, update builds included, starts it at 0.
+   Todos show nowhere else. Comment on the card with what changed and where ("Req 2 done" or
+   "Reqs 1-3 done" fills the right 25%, requirements met, which carries over between builds). Record each file you create or change with `spill_files`. Run the
    spec's acceptance checks and record them with `spill_checks` before moving it to `done`.
    A user comment "Fix failing check: <name>" (the app's Fix button) means: set the spec `active`,
    fix it, run the checks again with `spill_checks`, and move it back to `done`.

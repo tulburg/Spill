@@ -221,6 +221,20 @@ export const TOOLS: Tool[] = [
     },
   },
   {
+    name: "spill_todos",
+    description:
+      "Your todo list for the spec you are building (active). Record it right after setting the spec active, before writing code, then call again with the full list each time you finish an item (done: true), add one or reword one. It fills the left part of the card's progress bar; requirements met (\"Reqs 1-n done\") fill the right part. Each new build starts with an empty list. Todos are not shown anywhere else.",
+    inputSchema: {
+      type: "object",
+      properties: { id: str, items: { type: "array", items: { type: "object", properties: { text: str, done: { type: "boolean" } }, required: ["text"] } } },
+      required: ["id", "items"],
+    },
+    run: (b, a) => {
+      const l = b.todos(a);
+      return `${a.id}: ${l.items.filter((x) => x.done).length} of ${l.items.length} todos done`;
+    },
+  },
+  {
     name: "spill_reply",
     description:
       "Answer a board-level message from the user (inbox lines with action \"message\"). Goes to the latest thread still waiting on you, or to thread (the time an inbox line gives, \"in thread of YYYY-MM-DD HH:MM\"). The reply shows in that thread's card by the app's message button; missed replies leave a badge there.",
@@ -328,7 +342,7 @@ function designTools(): Tool[] {
     {
       name: "spill_design_feedback",
       description:
-        "The user's review of a spec's designs: whether the design (or each variant) is accepted, rejected with a reason, or waiting; every pin with its number, artboard, position (x, y in artboard px from the top left) and note; comments; and the replies on each. Pins and comments also reach spill_inbox. After changing the design for a pin, reply and resolve it with spill_design_reply.",
+        "The user's review of a spec's designs: whether the design (or each variant) is accepted, rejected with a reason, or waiting; every open pin with its number, artboard, position (x, y in artboard px from the top left) and note; open comments; the replies on each; and a count of resolved notes (resolved ones are cleared from the user's view and not listed). Pins and comments also reach spill_inbox. Work through the open notes: change the design for each, then reply with what changed and resolve it in the same spill_design_reply call. Leave a note open only when you need the user's answer; reply with the question.",
       inputSchema: { type: "object", properties: { spec }, required: ["spec"] },
       run: (b, a) => {
         const f = d(b).feedback(a.spec);
@@ -339,18 +353,21 @@ function designTools(): Tool[] {
         for (const k of keys) {
           const r = f.reviews[k];
           out.push(`${k ? `Variant ${k}` : "Design"}: ${r ? r.status : "waiting"}${r?.reason ? `: ${r.reason}` : ""}`);
-          for (const p of f.pins.filter((x) => (f.pinKey[x.n] ?? "") === k)) {
+          for (const p of f.pins.filter((x) => !x.resolved && (f.pinKey[x.n] ?? "") === k)) {
             const ab = f.artboards.find((x) => x.id === p.artboard);
-            out.push(`  Pin ${p.n}${p.resolved ? " (resolved)" : ""} on ${p.artboard}${ab ? ` "${ab.title}"` : ""} at (${p.x}, ${p.y}): ${p.text}`, ...replies(p.replies, "    "));
+            out.push(`  Pin ${p.n} on ${p.artboard}${ab ? ` "${ab.title}"` : ""} at (${p.x}, ${p.y}): ${p.text}`, ...replies(p.replies, "    "));
           }
-          for (const n of f.notes.filter((x) => x.variant === k)) out.push(`  Comment ${n.id}: ${n.text}`, ...replies(n.replies, "    "));
+          for (const n of f.notes.filter((x) => !x.resolved && x.variant === k)) out.push(`  Comment ${n.id}: ${n.text}`, ...replies(n.replies, "    "));
         }
+        const done = f.pins.filter((x) => x.resolved).length + f.notes.filter((x) => x.resolved).length;
+        const open = f.pins.length + f.notes.length - done;
+        out.push(`${open} open note${open === 1 ? "" : "s"}, ${done} resolved.`);
         return out.join("\n");
       },
     },
     {
       name: "spill_design_reply",
-      description: "Reply to a pin (pin: its number) or a comment (comment: c-n) on a spec's design. resolve: true marks a pin resolved, after you changed the design for it; text is then optional.",
+      description: "Reply to a pin (pin: its number) or a comment (comment: c-n) on a spec's design. resolve: true marks it resolved once you changed the design for it, which clears it from the user's view; pass text with what changed in the same call. Only you resolve; the user cannot.",
       inputSchema: { type: "object", properties: { spec, pin: { type: "number" }, comment: str, text: str, resolve: { type: "boolean" } }, required: ["spec"] },
       run: (b, a) => d(b).reply(a),
     },

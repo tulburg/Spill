@@ -200,6 +200,7 @@ export interface Note {
   text: string;
   at: string;
   replies: Reply[];
+  resolved?: string;
 }
 export interface Review {
   status: "accepted" | "rejected";
@@ -551,9 +552,11 @@ export class Designs {
     this.log(a.spec, `${key ? `variant ${key}` : "design"} ${a.status === "waiting" ? "back to waiting" : a.status}${a.status === "rejected" ? `: ${reason}` : ""}`, "design_review");
   }
 
-  // A reply on a pin (by number) or a comment (c-n); resolve marks a pin resolved.
+  // A reply on a pin (by number) or a comment (c-n); resolve marks either one resolved, which
+  // clears it from the review UI (S-46 reqs 5, 8). Only Claude resolves.
   reply(a: { spec: string; pin?: number; comment?: string; text?: string; resolve?: boolean }): string {
     this.checkSpec(a.spec);
+    if (a.resolve && this.actor !== "claude") throw new Error("Only Claude resolves review notes");
     const text = (a.text ?? "").trim();
     const fb = this.feedbackOf(a.spec);
     const at = new Date().toISOString();
@@ -569,14 +572,15 @@ export class Designs {
       return `${done[0].toUpperCase()}${done.slice(1)} pin ${p.n}`;
     }
     if (a.comment) {
-      if (a.resolve) throw new Error("Only pins are resolved; reply to the comment instead");
       const n = fb.notes.find((x) => x.id === a.comment);
       if (!n) throw new Error(`No comment ${a.comment} on ${a.spec}`);
-      if (!text) throw new Error("Reply text is required");
-      n.replies.push({ by: this.actor, text, at });
+      if (!text && !a.resolve) throw new Error("Reply text is required");
+      if (text) n.replies.push({ by: this.actor, text, at });
+      if (a.resolve) n.resolved = at;
       this.saveFeedback(a.spec, fb);
-      this.log(a.spec, `replied to comment ${n.id}: ${text}`);
-      return `Replied to comment ${n.id}`;
+      const done = [text ? "replied to" : "", a.resolve ? "resolved" : ""].filter(Boolean).join(" and ");
+      this.log(a.spec, `${done} comment ${n.id}${text ? `: ${text}` : ""}`);
+      return `${done[0].toUpperCase()}${done.slice(1)} comment ${n.id}`;
     }
     throw new Error("Name a pin (number) or a comment (c-n)");
   }

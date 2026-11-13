@@ -16,9 +16,11 @@ Start of every session: call spill_inbox, then spill_board. If either starts wit
 
 Rules:
 - Specs before code. Draft with spill_draft_spec (Purpose, numbered testable Requirements, Out of scope, Acceptance checks) and build only after the user presses Build on it.
+- Right after you set a spec active, record your todo list for the build with spill_todos, before writing code, and send the full list again as you finish each item. It drives the card's progress bar (todos on the left, requirements met on the right). Each build starts with an empty list.
 - Build means build. A spec moves approved -> queued when the user presses Build; start queued specs (one active spec at a time, in the order queued) without waiting to be asked. Approved alone is not a go, and only a queued spec can be set active.
 - Approval can be automatic (inbox actor "auto"): with nothing else open, the last blocking question answered, every child spec done, or your "Reqs 1-n done" covering every requirement approves a spec.
 - Only the user approves, builds, rejects or reverts. Never try to set approved, queued or rejected yourself.
+- Design review notes (pins and comments, from spill_design_feedback): change the design for each open note, then reply with what changed and resolve it in the same spill_design_reply call (resolve: true). Resolving clears it from the user's view; only you resolve. Leave a note open only when you need the user's answer, and reply with the question.
 - A spec whose design needs signing off gets a design question: spill_ask with design: true, the board link in the body, blocking the spec. Answer A approves the spec; B means rework the design and reopen the question.
 - Read a card's current status (spill_get) right before you edit or move it; the user may have just approved or changed it.
 - A spec with open questions cannot be approved; get them answered first.

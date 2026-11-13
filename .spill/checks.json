@@ -784,23 +784,33 @@
     ]
   },
   "S-46": {
-    "at": "2026-11-09T14:10:50.100Z",
+    "at": "2026-11-13T17:27:12.803Z",
     "running": false,
     "results": [
       {
-        "name": "A pin dropped on an artboard reaches the inbox with its number and note, and spill_design_feedback returns its position",
+        "name": "1. A pin reaches the inbox with its number and note; spill_design_feedback returns its position",
         "pass": true,
-        "detail": "Scratch board, headless Chrome: clicked the artboard at 82%, typed, Enter. Event design_pin \"pin 1 on ab-1 \\\"Editor\\\" at (701, 400): ...\"; spill_design_feedback lists Pin 1 at (701, 400). Pin stays at (701, 400) and 26px at 129%."
+        "detail": "Unit test: design_pin inbox line and Pin 1 at (120, 80)."
       },
       {
-        "name": "Accepting variant A and rejecting B shows both statuses; Approve disabled until one is accepted; a spec without variants is accepted as a whole",
+        "name": "2. Accept A and reject B show both statuses; Approve waits for an accepted design",
         "pass": true,
-        "detail": "Approve disabled with \"Accept the design or a variant first\"; B rejected with a two-line reason (Cmd Enter), A accepted; board and Overview show A Accepted, B Rejected; Approve enabled. S-49 (no variants) accepted as one design. Server refuses approval while waiting (unit tests)."
+        "detail": "Unit tests; unchanged since the first build."
       },
       {
-        "name": "Claude's reply and resolve on a pin show in the viewer",
+        "name": "3. Claude's reply on a pin shows in the viewer",
         "pass": true,
-        "detail": "spill_design_reply on pin 1 (resolve) and comment c-1 while the viewer was open: reply, struck-through resolved pin and grey pin marker appeared without a reload, light and dark."
+        "detail": "Board copy: replies show under open notes."
+      },
+      {
+        "name": "4. Resolving clears a pin from the artboard and panel, and a comment from the panel; a new pin fits the same spot",
+        "pass": true,
+        "detail": "Board copy, S-49: pin 2 and comment c-1 showed; after Claude resolved both, the artboard had no pins and the panel read 'No notes yet'. Unit test: a new pin at the same spot gets n=2."
+      },
+      {
+        "name": "5. spill_design_feedback shows only open notes plus a resolved count",
+        "pass": true,
+        "detail": "Unit tests: resolved pin and comment not listed; '1 open note, 1 resolved.' and '0 open notes, 2 resolved.'"
       }
     ]
   },
@@ -833,6 +843,37 @@
         "name": "Each part's checks pass",
         "pass": true,
         "detail": "S-44 4/4, S-45 5/5, S-46 3/3, S-47 3/3; 61 unit tests pass."
+      }
+    ]
+  },
+  "S-48": {
+    "at": "2026-11-13T17:53:32.840Z",
+    "running": false,
+    "results": [
+      {
+        "name": "1. Active spec with 4 todos, 1 done: left bar 25%, '1 of 4 todos' next to the reqs bar",
+        "pass": true,
+        "detail": "Board copy: label '1 of 4 todos | 0 of 7 reqs', todo fill width 25%."
+      },
+      {
+        "name": "2. Two bars on one line, 4px apart, 75% and 25%",
+        "pass": true,
+        "detail": "Measured 173px and 58px with a 4px gap."
+      },
+      {
+        "name": "3. Ticking todos fills the bar live, with no new Activity lines",
+        "pass": true,
+        "detail": "The card updated without a reload; events.jsonl line count unchanged (697). Unit test: spill_todos logs no event."
+      },
+      {
+        "name": "4. An update build starts todos at 0 and keeps met requirements",
+        "pass": true,
+        "detail": "Unit test: done, then back through approved/queued to active clears the todo list; 'Req 1 done' still counts."
+      },
+      {
+        "name": "5. No todo list yet shows 'No todo list yet'",
+        "pass": true,
+        "detail": "Board copy, before any todos were recorded."
       }
     ]
   }

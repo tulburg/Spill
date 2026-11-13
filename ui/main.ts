@@ -10,6 +10,7 @@ interface BoardData {
   rejections: { id: string; reason: string; at: string }[];
   events: SpillEvent[];
   checks: Record<string, CheckRun>;
+  todos?: Record<string, { at: string; items: { text: string; done: boolean }[] }>;
   messageState?: "received" | "working" | null;
   // S-30: every board message, older than the event window too.
   messages?: SpillEvent[];
@@ -192,6 +193,24 @@ function progressBar(c: Card, compact = false): HTMLElement | null {
   const bar = h("div", { class: "bar" }, h("i", { style: `width:${Math.round((p.done / p.total) * 100)}%;--d:-${(Date.now() % 2000) / 1000}s` }));
   if (compact) return h("div", { class: "prog compact" }, bar, h("span", { class: "n" }, `${p.done}/${p.total}`));
   return h("div", { class: "prog" }, h("div", { class: "row" }, h("span", {}, "Progress"), h("span", { class: "sp" }), h("span", { class: "n" }, `${p.done} of ${p.total}`)), bar);
+}
+
+// S-48: the building card's bar, split 75/25: Claude's todo list for this build on the left,
+// requirements met on the right (carried over between builds).
+function buildProgress(c: Card): HTMLElement {
+  const p = progress(c);
+  const items = data.todos?.[c.id]?.items ?? [];
+  const td = items.filter((x) => x.done).length;
+  const d = `--d:-${(Date.now() % 2000) / 1000}s`;
+  const fill = (n: number, of: number) => h("div", { class: "bar" }, h("i", { style: `width:${of ? Math.round((n / of) * 100) : 0}%;${d}` }));
+  // Labels share one row (a quarter is too narrow for its own): todos at the left edge of the left
+  // bar, requirements at the right edge of the right bar.
+  return h(
+    "div",
+    { class: "prog split" },
+    h("div", { class: "row" }, h("span", { class: `n${items.length ? "" : " none"}` }, items.length ? `${td} of ${items.length} todos` : "No todo list yet"), h("span", { class: "sp" }), h("span", { class: "n" }, p.total ? `${p.done} of ${p.total} reqs` : "No reqs")),
+    h("div", { class: "halves" }, h("div", { class: "half todo" }, fill(td, items.length)), h("div", { class: "half reqs" }, fill(p.done, p.total))),
+  );
 }
 
 const seenLatest = new Map<string, string>();
@@ -1025,7 +1044,7 @@ function specCard(c: Card): HTMLElement {
       status,
     ),
     h("div", { style: "display:flex;flex-direction:column;gap:4px" }, h("div", { class: "title" }, c.title), active ? latestLine(c) : whyLine(c) ? h("div", { class: "why" }, whyLine(c)) : null),
-    active ? progressBar(c) : facts.length ? h("div", { class: "facts" }, facts.slice(0, 3)) : null,
+    active ? buildProgress(c) : facts.length ? h("div", { class: "facts" }, facts.slice(0, 3)) : null,
     specActions(c),
     branchChips(c),
     blockMarkers(c),
@@ -1468,16 +1487,32 @@ function cleanDesign(html: string): DocumentFragment {
 
 // An artboard at scale, in a shadow root: its CSS cannot reach Spill and Spill's cannot reach it,
 // and unlike an iframe it survives the board's redraws without reloading.
+// Every render rebuilds the page, so a design would be parsed again and its images and fonts
+// redrawn, which flashes. A design whose HTML and size have not changed reuses its rendered host;
+// one host can sit in one place per render, so a second use in the same render gets a fresh one.
+let renderGen = 0;
+const designHosts = new Map<string, { host: HTMLElement; html: string | null; gen: number }>();
 function designView(spec: string, a: Artboard, scale: number): HTMLElement {
+  const html = a.html ?? htmlFor(spec, a);
+  const key = `${spec}/${a.id}/${a.width}x${a.height}@${scale}`;
+  const got = designHosts.get(key);
+  if (got && got.gen !== renderGen && got.html === html) {
+    got.gen = renderGen;
+    return got.host;
+  }
+  const host = buildDesign(a, scale, html);
+  if (!got || got.gen !== renderGen) designHosts.set(key, { host, html, gen: renderGen });
+  return host;
+}
+function buildDesign(a: Artboard, scale: number, html: string | null): HTMLElement {
   const w = px(a.width);
   const hh = px(a.height);
   const host = h("div", { class: "dz", style: `width:${Math.round(w * scale)}px;height:${Math.round(hh * scale)}px` });
   const root = host.attachShadow({ mode: "open" });
   const style = document.createElement("style");
-  style.textContent = `:host{all:initial;display:block;overflow:hidden;contain:paint}.ab{width:${w}px;height:${hh}px;transform:scale(${scale});transform-origin:0 0;overflow:hidden;font-family:system-ui,sans-serif;color:#000;background:#fff}.ab>*{box-sizing:border-box}`;
+  style.textContent = `:host{all:initial;display:block;overflow:hidden;contain:paint}.ab{width:${w}px;height:${hh}px;transform:scale(${scale});transform-origin:0 0;overflow:hidden;font-family:system-ui,sans-serif;color:#000;background:#fff}.ab>*{box-sizing:border-box}.ab,.ab *{cursor:inherit!important}`;
   const ab = document.createElement("div");
   ab.className = "ab";
-  const html = a.html ?? htmlFor(spec, a);
   if (html) ab.append(cleanDesign(html));
   root.append(style, ab);
   return host;
@@ -1628,6 +1663,7 @@ interface DNote {
   text: string;
   at: string;
   replies: DReply[];
+  resolved?: string;
 }
 interface DesignFeedback {
   pins: DPin[];
@@ -1755,7 +1791,7 @@ function pinsOn(spec: string, a: Artboard, interactive: boolean): HTMLElement[] 
     );
   const d = review.pin;
   if (interactive && d && d.ab === a.id) {
-    const next = (fb.pins.reduce((m, p) => Math.max(m, p.n), 0) || 0) + 1;
+    const next = (feedbackOf(spec).pins.reduce((m, p) => Math.max(m, p.n), 0) || 0) + 1;
     const box = draftBox("pin", "What should change here?", () => d.text, (v) => (d.text = v), () => savePin(spec), 2);
     out.push(
       h("div", { class: "dzv-pin draft", style: `left:${d.x}px;top:${d.y}px` }, h("span", {}, String(next))),
@@ -1836,6 +1872,9 @@ function reviewPanel(spec: string, key: string, mode: "one" | "board"): HTMLElem
     { class: "dzr-list" },
     items.length ? items.map((x) => x.el) : h("div", { class: "dzr-empty" }, readOnly ? "No notes on this version." : mode === "one" ? "No notes yet. Click a spot on the artboard to pin one." : "No notes yet. Shift+click a spot on an artboard to pin one."),
   );
+  // Keep the list where it was scrolled; the frame callback runs once it is mounted, before paint.
+  const listTop = document.querySelector(".dzr-list")?.scrollTop ?? 0;
+  if (listTop) requestAnimationFrame(() => (list.scrollTop = listTop));
 
   if (readOnly) return h("div", { class: "dzr" }, head, list, h("div", { class: "dzr-foot" }, h("div", { class: "hint" }, "Read only. Pins and reviews are added on the current design.")));
   const box = draftBox("comment", `Comment on ${where}`, () => review.comment, (v) => (review.comment = v), () => sendComment(spec, key));
@@ -1889,7 +1928,11 @@ function vBoards(spec: string): Artboard[] {
   return designsOf(spec);
 }
 function vFeedback(spec: string): DesignFeedback {
-  if (!(viewer?.snap && viewer.spec === spec)) return feedbackOf(spec);
+  // S-46 req 8: resolved notes are cleared from the live review; an approved snapshot keeps them.
+  if (!(viewer?.snap && viewer.spec === spec)) {
+    const fb = feedbackOf(spec);
+    return { ...fb, pins: fb.pins.filter((p) => !p.resolved), notes: fb.notes.filter((n) => !n.resolved) };
+  }
   const snap = vSnap();
   if (!snap) return { pins: [], notes: [], reviews: {}, pinKey: {} };
   const vs = variantsIn(snap.artboards);
@@ -1911,6 +1954,14 @@ function openViewer(spec: string, mode: "one" | "board", id?: string, keepReview
   viewer.id = mode === "one" ? (id ?? vBoards(spec)[0]?.id) : undefined;
   render();
 }
+// Holding Shift shows the comment cursor on the whole board before the click that pins.
+function shiftPin(on: boolean) {
+  document.documentElement.classList.toggle("shift-pin", on);
+}
+window.addEventListener("keydown", (e) => e.key === "Shift" && shiftPin(true));
+window.addEventListener("keyup", (e) => e.key === "Shift" && shiftPin(false));
+window.addEventListener("blur", () => shiftPin(false));
+
 function closeViewer() {
   viewer = null;
   review = { sel: "", comment: "", pin: null, rejecting: null, reason: "", focus: "", active: 0, err: "" };
@@ -2020,7 +2071,7 @@ function viewerPanel(): HTMLElement | null {
   world.style.transform = `translate(${v.x}px, ${v.y}px) scale(${z0})`;
   world.style.setProperty("--iz", String(1 / z0));
 
-  const stage = h("div", { class: `dzv-stage${one && !readOnly ? " pinning" : ""}` }, world, h("div", { class: "dzv-hint" }, readOnly ? "Read only. Drag to pan, pinch or Cmd scroll to zoom, Esc to close" : one ? "Click to pin a note, drag to pan, pinch or Cmd scroll to zoom, arrows to step, Esc to close" : `${variants.length ? "Click a variant to review it, " : ""}Shift+click to pin a note, double-click an artboard to focus it, Esc to close`), one ? h("div", { class: "dzv-pos" }, `${boards.indexOf(one) + 1} / ${boards.length}`) : null);
+  const stage = h("div", { class: `dzv-stage${!readOnly ? " can-pin" : ""}${one && !readOnly ? " pinning" : ""}` }, world, h("div", { class: "dzv-hint" }, readOnly ? "Read only. Drag to pan, pinch or Cmd scroll to zoom, Esc to close" : one ? "Click to pin a note, drag to pan, pinch or Cmd scroll to zoom, arrows to step, Esc to close" : `${variants.length ? "Click a variant to review it, " : ""}Shift+click to pin a note, double-click an artboard to focus it, Esc to close`), one ? h("div", { class: "dzv-pos" }, `${boards.indexOf(one) + 1} / ${boards.length}`) : null);
   // Drag pans; a click without a drag drops a pin (one artboard) or picks a variant (whole board).
   // Pinch, Cmd or Ctrl scroll zooms at the pointer; plain scroll pans.
   let drag: { x: number; y: number; vx: number; vy: number; moved: boolean; target: HTMLElement } | null = null;
@@ -2033,6 +2084,7 @@ function viewerPanel(): HTMLElement | null {
     stage.classList.add("dragging");
   });
   stage.addEventListener("pointermove", (e) => {
+    shiftPin(e.shiftKey);
     if (!drag) return;
     if (Math.abs(e.clientX - drag.x) + Math.abs(e.clientY - drag.y) > 4) drag.moved = true;
     if (drag.moved) applyViewer(viewerZ, drag.vx + e.clientX - drag.x, drag.vy + e.clientY - drag.y);
@@ -2083,7 +2135,8 @@ function viewerPanel(): HTMLElement | null {
 
   return h(
     "div",
-    { class: "dzv-scrim", onclick: (e: Event) => e.target === e.currentTarget && closeViewer() },
+    // The fade-in plays when the viewer opens, not on every update while it stays open.
+    { class: `dzv-scrim${document.querySelector(".dzv-scrim") ? " stay" : ""}`, onclick: (e: Event) => e.target === e.currentTarget && closeViewer() },
     h(
       "div",
       { class: "dzv" },
@@ -3250,6 +3303,7 @@ function messageDrop(): HTMLElement | null {
 let live = false;
 
 function render() {
+  renderGen++;
   // S-36: with a window per project, the title names the project.
   document.title = data.project ? `Spill: ${data.project}` : "Spill";
   const app = document.getElementById("app")!;
