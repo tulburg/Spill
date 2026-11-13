@@ -1076,10 +1076,10 @@ button.fix:disabled { border-color: var(--border); color: var(--faint); cursor: 
 .dzv-item { display: flex; flex-direction: column; gap: 10px; }
 .dzv-cap { font-size: 28px; color: var(--muted); }
 .dzv-hint { position: absolute; left: 16px; bottom: 12px; font-size: 12px; color: var(--muted); pointer-events: none; }
-.dzv-pos { position: absolute; right: 16px; bottom: 12px; font-family: "Geist Mono", monospace; font-size: 11px; color: var(--muted); pointer-events: none; }
+.dzv-pos { position: absolute; right: 328px; bottom: 12px; font-family: "Geist Mono", monospace; font-size: 11px; color: var(--muted); pointer-events: none; }
 
 /* S-46: design review in the larger canvas */
-.dzv-body { flex: 1; min-height: 0; display: flex; }
+.dzv-body { flex: 1; min-height: 0; display: flex; position: relative; }
 .dzv-body .dzv-stage { flex: 1; }
 .dzv-stage.pinning .dzv-ab { cursor: crosshair; }
 .dzv-back { display: inline-flex; align-items: center; gap: 6px; margin-left: 4px; padding: 4px 10px; border: 1px solid var(--border); border-radius: 8px; background: none; font: inherit; font-size: 12px; color: var(--text-2); cursor: pointer; }
@@ -1104,7 +1104,8 @@ button.fix:disabled { border-color: var(--border); color: var(--faint); cursor: 
 .btn.ghost { border-color: transparent; background: none; }
 
 /* The review panel */
-.dzr { width: 300px; flex: none; display: flex; flex-direction: column; border-left: 1px solid var(--border); background: var(--card); }
+/* The review panel floats over the stage and wraps its content, up to the stage height. */
+.dzr { position: absolute; top: 12px; right: 12px; width: 300px; max-height: calc(100% - 24px); display: flex; flex-direction: column; background: var(--card); border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 12px 40px rgba(var(--shadow-rgb), 0.1); overflow: hidden; z-index: 2; }
 .dzr-head { padding: 16px; display: flex; flex-direction: column; gap: 12px; border-bottom: 1px solid var(--border); }
 .dzr-title { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 500; color: var(--text); }
 .dzr-title .sp { flex: 1; }
@@ -1122,7 +1123,7 @@ button.fix:disabled { border-color: var(--border); color: var(--faint); cursor: 
 .dzr-row .sp { flex: 1; }
 .dzr-row .hint { flex: none; }
 .dzr-why { font-size: 12px; line-height: 16px; color: var(--red-text); white-space: pre-wrap; }
-.dzr-list { flex: 1; min-height: 0; overflow-y: auto; padding: 8px 8px; display: flex; flex-direction: column; }
+.dzr-list { flex: 0 1 auto; min-height: 0; overflow-y: auto; padding: 8px 8px; display: flex; flex-direction: column; }
 .dzr-empty { padding: 16px 8px; font-size: 12px; color: var(--muted); }
 .dzr-item { display: flex; gap: 10px; padding: 8px; border-radius: 8px; cursor: pointer; }
 .dzr-item:hover { background: var(--canvas); }

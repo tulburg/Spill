@@ -1834,7 +1834,7 @@ function reviewPanel(spec: string, key: string, mode: "one" | "board"): HTMLElem
   const list = h(
     "div",
     { class: "dzr-list" },
-    items.length ? items.map((x) => x.el) : h("div", { class: "dzr-empty" }, readOnly ? "No notes on this version." : mode === "one" ? "No notes yet. Click the artboard to pin one to a spot." : "No notes yet."),
+    items.length ? items.map((x) => x.el) : h("div", { class: "dzr-empty" }, readOnly ? "No notes on this version." : mode === "one" ? "No notes yet. Click a spot on the artboard to pin one." : "No notes yet. Shift+click a spot on an artboard to pin one."),
   );
 
   if (readOnly) return h("div", { class: "dzr" }, head, list, h("div", { class: "dzr-foot" }, h("div", { class: "hint" }, "Read only. Pins and reviews are added on the current design.")));
@@ -1844,7 +1844,7 @@ function reviewPanel(spec: string, key: string, mode: "one" | "board"): HTMLElem
     { class: "dzr-foot" },
     h("div", { class: "reason comment" }, box),
     review.err ? h("div", { class: "err" }, review.err) : null,
-    h("div", { class: "hint" }, mode === "one" ? "Click the artboard to pin a note to a spot" : variants.length ? "Click a variant to review it; double-click an artboard to pin notes on it" : "Double-click an artboard to pin notes on it"),
+    h("div", { class: "hint" }, mode === "one" ? "Click a spot on the artboard to pin a note to it" : variants.length ? "Click a variant to review it; Shift+click a spot to pin a note" : "Shift+click a spot on an artboard to pin a note"),
   );
   return h("div", { class: "dzr" }, head, list, foot);
 }
@@ -1936,7 +1936,9 @@ function viewerStage(): { stage: HTMLElement; world: HTMLElement } | null {
 function fitViewer() {
   const s = viewerStage();
   if (!s || !viewer) return;
-  const sw = s.stage.clientWidth;
+  // The review panel floats over the stage's right side; fit into the space left of it.
+  const panel = document.querySelector<HTMLElement>(".dzv-body .dzr");
+  const sw = s.stage.clientWidth - (panel ? panel.offsetWidth + 12 : 0);
   const sh = s.stage.clientHeight;
   const cw = s.world.offsetWidth;
   const ch = s.world.offsetHeight;
@@ -2009,7 +2011,7 @@ function viewerPanel(): HTMLElement | null {
                 { class: "dzv-set" },
                 boards
                   .filter((a) => !variants.length || a.variant === vr)
-                  .map((a) => h("div", { class: "dzv-item", ondblclick: () => openViewer(v.spec, "one", a.id, true) }, abView(a, false), h("div", { class: "dzv-cap" }, a.title))),
+                  .map((a) => h("div", { class: "dzv-item", ondblclick: () => openViewer(v.spec, "one", a.id, true) }, abView(a, !readOnly), h("div", { class: "dzv-cap" }, a.title))),
               ),
             ),
           ),
@@ -2018,7 +2020,7 @@ function viewerPanel(): HTMLElement | null {
   world.style.transform = `translate(${v.x}px, ${v.y}px) scale(${z0})`;
   world.style.setProperty("--iz", String(1 / z0));
 
-  const stage = h("div", { class: `dzv-stage${one && !readOnly ? " pinning" : ""}` }, world, h("div", { class: "dzv-hint" }, readOnly ? "Read only. Drag to pan, pinch or Cmd scroll to zoom, Esc to close" : one ? "Click to pin a note, drag to pan, pinch or Cmd scroll to zoom, arrows to step, Esc to close" : "Click a variant to review it, double-click an artboard to focus it, Esc to close"), one ? h("div", { class: "dzv-pos" }, `${boards.indexOf(one) + 1} / ${boards.length}`) : null);
+  const stage = h("div", { class: `dzv-stage${one && !readOnly ? " pinning" : ""}` }, world, h("div", { class: "dzv-hint" }, readOnly ? "Read only. Drag to pan, pinch or Cmd scroll to zoom, Esc to close" : one ? "Click to pin a note, drag to pan, pinch or Cmd scroll to zoom, arrows to step, Esc to close" : `${variants.length ? "Click a variant to review it, " : ""}Shift+click to pin a note, double-click an artboard to focus it, Esc to close`), one ? h("div", { class: "dzv-pos" }, `${boards.indexOf(one) + 1} / ${boards.length}`) : null);
   // Drag pans; a click without a drag drops a pin (one artboard) or picks a variant (whole board).
   // Pinch, Cmd or Ctrl scroll zooms at the pointer; plain scroll pans.
   let drag: { x: number; y: number; vx: number; vy: number; moved: boolean; target: HTMLElement } | null = null;
@@ -2041,12 +2043,16 @@ function viewerPanel(): HTMLElement | null {
     stage.classList.remove("dragging");
     if (!d || d.moved) return;
     const ab = d.target.closest<HTMLElement>(".dzv-ab");
-    if (one && ab && !readOnly) {
+    if (ab && !readOnly && (one || e.shiftKey)) {
+      // A click pins on one artboard; on the whole board Shift+click pins (a plain click picks a
+      // variant) and also picks that artboard's variant, so the panel shows the pin's thread.
       const r = ab.getBoundingClientRect();
       const x = Math.round((e.clientX - r.left) / viewerZ);
       const y = Math.round((e.clientY - r.top) / viewerZ);
+      const vr = ab.closest<HTMLElement>(".dzv-group")?.dataset.variant;
+      if (!one && vr && vr !== review.sel) ((review.sel = vr), (review.rejecting = null));
       // A half-typed pin moves to the new spot instead of being lost.
-      review.pin = { ab: one.id, x, y, text: review.pin?.text ?? "" };
+      review.pin = { ab: one ? one.id : ab.dataset.ab!, x, y, text: review.pin?.text ?? "" };
       review.focus = "pin";
       review.active = 0;
       render();
