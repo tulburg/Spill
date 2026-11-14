@@ -64,7 +64,13 @@ draft -> discussing -> approved -> queued -> active -> done
   to remove. **Never remove code before the user picks A.** Then remove it, record the removed files
   with `spill_files`, and set the old spec `replaced`: it stays dimmed, linked to its replacement,
   with its questions and decisions. On B, keep it and link the new spec `follows` it.
-- `rejected`: the user said no. **Only the user sets this.** Keep the card; do not delete it.
+- `rejected`: the user said no. **Only the user sets this.** Keep the card; do not delete it to undo the rejection.
+- Deleting a card: a card that should not exist (a duplicate, or a change drafted as a new spec that
+  belongs on an existing one) is deleted only through `spill_propose_delete`, which asks "Delete
+  S-n?". **Nothing is deleted until the user picks A**; then the card, every link to it, and its open
+  questions that block nothing else are removed, and the question stays as the record. Only specs in
+  draft, discussing, approved or rejected, and open or dropped questions; a done spec goes through
+  `spill_propose_replace`. On B, keep it and do not propose it again unless something changes.
 - `active`: Claude is implementing it right now. Only a `queued` spec can be made active.
 - `done`: shipped and verified.
 - `replaced`: a done spec the user agreed to replace; its code is removed. Set it only after the
@@ -102,6 +108,7 @@ The `spill` MCP server exposes these tools (all take the project from the workin
 | `spill_link`         | Link two cards (`blocks`, `answers`, `depends_on`, `follows`). `depends_on` makes the spec a child of the target; `follows` marks a branch from a done spec. |
 | `spill_files`        | Record the files you touched building a spec (`new`, `changed`, `removed`); shown as its Files list. |
 | `spill_propose_replace` | Ask to delete and replace a done spec; names the files to remove. Nothing is removed until the user picks A. |
+| `spill_propose_delete` | Ask to delete a card that should not exist (not a done spec). Nothing is deleted until the user picks A. |
 | `spill_record`       | Record a `D-n` decision and close the question it answers.             |
 | `spill_rejections`   | The rejection queue: rejected specs still waiting on you, with reasons; `resolve` one to leave it rejected. |
 | `spill_focus`        | Set the spotlight: cards being discussed now and cards up next.        |
@@ -131,23 +138,24 @@ The `spill` MCP server exposes these tools (all take the project from the workin
 4. **Wait for Build, then build.** Do not start code for a spec until the user presses Build and
    it is `queued`. Build means build: start it without being asked, one active spec at a time,
    in the order queued. An approval alone is not a go.
-   A spec that needs a design signed off gets a design question: `spill_ask` with `design: true`,
-   the board link in the body, blocking the spec. It offers "A. Approve this design" and
-   "B. Needs changes"; A approves the spec ("design approved") if nothing else is open, B means
-   rework the design and reopen the question.
    Designs are drawn in Spill and owned by the spec (D-31): once spec designs exist (S-42), draw them
    with Spill's design tools instead of Paper or OpenDraw, and the review happens in the Designs
    section of the spec's Overview. Most specs have one design: leave out the variant. Use variants
    (A, B, C) only to offer several directions; the user compares them side by side on the board.
-   The user reviews there (S-46): pins on a spot, comments, and Accept or Reject per variant (or
-   for the whole design). These reach your inbox (`design_pin`, `design_comment`, `design_review`);
-   `spill_design_feedback` gives every open pin's position and note, open comments, and a count
-   of resolved ones. Work through the open notes: change the design for each one, then reply with
-   what changed and resolve it in the same `spill_design_reply` call (`resolve: true`, for pins and
-   comments alike). Resolving clears the note from the user's view, so the spot is free for new
-   pins; only you resolve. Leave a note open only when you need the user's answer, and reply with
-   the question. A spec whose designs are not accepted
-   (the design or one variant) cannot be approved, like open questions.
+   In the design viewer the user only comments (S-46): pins on a spot (Shift+click) and comment
+   threads. These reach your inbox (`design_pin`, `design_comment`); `spill_design_feedback` gives
+   every open pin's position and note, open comments, and a count of resolved ones. Work through
+   the open notes: change the design for each one, then reply with what changed and resolve it in
+   the same `spill_design_reply` call (`resolve: true`, for pins and comments alike). Resolving
+   clears the note from the user's view, so the spot is free for new pins; only you resolve. Leave
+   a note open only when you need the user's answer, and reply with the question.
+   **Design sign-off is one design question per spec**, never an approval in the viewer:
+   `spill_ask` with `design: true`, blocking that one spec. Do not list options; the app builds
+   them from the designs: one per variant ("Variant A: ...", "Variant B: ...") or "Approve this
+   design", then "Needs changes". Answering with a variant (or "Approve this design") records it as
+   the chosen one and approves the spec if nothing else is open. "Needs changes" leaves it waiting:
+   rework the design from the notes and the answer, then reopen the same question. A spec with
+   designs cannot be approved any other way.
    Approval keeps a read-only copy of the spec's designs (S-47, D-35): later edits never change
    what was approved, and comparing with that version lists the design changes since.
    A spec with open questions cannot be approved. Read a card's current status right before you

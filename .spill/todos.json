@@ -1,0 +1,130 @@
+{
+  "S-53": {
+    "at": "2026-11-14T06:27:36.516Z",
+    "items": [
+      {
+        "text": "Board.proposeDelete with status rules",
+        "done": true
+      },
+      {
+        "text": "Delete on answer A: file, links, blocking-only questions, event",
+        "done": true
+      },
+      {
+        "text": "spill_propose_delete MCP tool",
+        "done": true
+      },
+      {
+        "text": "UI handles missing cards and plain ids in events",
+        "done": true
+      },
+      {
+        "text": "Instructions in mcp.ts, tool description, SPILL.md",
+        "done": true
+      },
+      {
+        "text": "Tests",
+        "done": true
+      },
+      {
+        "text": "Check on a board copy",
+        "done": true
+      }
+    ]
+  },
+  "S-34": {
+    "at": "2026-11-14T06:40:02.739Z",
+    "items": [
+      {
+        "text": "Line diff that ignores numbering",
+        "done": true
+      },
+      {
+        "text": "Pair similar changed lines with word-level segments",
+        "done": true
+      },
+      {
+        "text": "Inline rendering in the sheet diff",
+        "done": true
+      },
+      {
+        "text": "spill_get summary with ~ lines",
+        "done": true
+      },
+      {
+        "text": "Tests",
+        "done": true
+      },
+      {
+        "text": "Check on a board copy",
+        "done": true
+      }
+    ]
+  },
+  "S-46": {
+    "at": "2026-11-14T06:47:49.609Z",
+    "items": [
+      {
+        "text": "Shift+click is the only pin gesture in both views",
+        "done": true
+      },
+      {
+        "text": "Remove Accept, Reject and Undo from the viewer",
+        "done": true
+      },
+      {
+        "text": "Design question options built from variants",
+        "done": true
+      },
+      {
+        "text": "Answer approves the spec and records the chosen variant",
+        "done": true
+      },
+      {
+        "text": "Open designs link on the question; card Approve points to it",
+        "done": true
+      },
+      {
+        "text": "Chosen marks in viewer, sheet and snapshot",
+        "done": true
+      },
+      {
+        "text": "Instructions, tool descriptions, SPILL.md",
+        "done": true
+      },
+      {
+        "text": "Tests and check on a board copy",
+        "done": true
+      }
+    ]
+  },
+  "S-45": {
+    "at": "2026-11-14T06:54:04.408Z",
+    "items": [
+      {
+        "text": "Design window URL that renders only the viewer",
+        "done": true
+      },
+      {
+        "text": "Open designs from the board in that window, one per spec",
+        "done": true
+      },
+      {
+        "text": "Native Tauri window: title, focus existing, close with project, Window menu",
+        "done": true
+      },
+      {
+        "text": "Browser fallback: named tab per spec",
+        "done": true
+      },
+      {
+        "text": "Esc closes the window; drafts kept",
+        "done": true
+      },
+      {
+        "text": "Check in browser and in the built app",
+        "done": true
+      }
+    ]
+  }
+}

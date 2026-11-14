@@ -519,28 +519,43 @@
     ]
   },
   "S-34": {
-    "at": "2026-11-02T09:01:56.844Z",
+    "at": "2026-11-14T06:40:02.826Z",
     "running": false,
     "results": [
       {
-        "name": "Two text updates leave versions with times and authors",
+        "name": "Two text updates leave two versions with times and authors",
         "pass": true,
-        "detail": "S-31 on a copy: original plus 2 versions in .spill/versions/S-31.jsonl, each with time and actor; unit test covers it too"
+        "detail": "Existing versions test."
       },
       {
-        "name": "Changed since approved and the diff",
+        "name": "Changed since approved and a diff",
         "pass": true,
-        "detail": "Indigo pill; Overview opens on the diff vs the approved version: +3 -2, removed red struck, added green, unchanged runs folded by section"
+        "detail": "Board copy: S-45 shows the header pill and the diff."
       },
       {
-        "name": "Older version diffs against current",
+        "name": "Older version diff",
         "pass": true,
-        "detail": "Picking v2 showed +2 -1; \"Nothing, show the spec\" returns to the plain text"
+        "detail": "Picker still compares any version with the current text."
       },
       {
-        "name": "spill_get lists changes since approved",
+        "name": "spill_get lists the changes",
         "pass": true,
-        "detail": "Ends with \"Changes since the approved version: +3 -2 lines\" and the changed lines"
+        "detail": "Summary reads +2 -0 ~1 with '~ 2. two, faster'."
+      },
+      {
+        "name": "Inserted item marks only itself",
+        "pass": true,
+        "detail": "Unit test: renumbered items stay unchanged with new numbers."
+      },
+      {
+        "name": "One word changed shows inline",
+        "pass": true,
+        "detail": "Unit test, and on S-45: '10. Previews and the [larger canvas -> design window] update live'."
+      },
+      {
+        "name": "Full rewrite is a del and an add",
+        "pass": true,
+        "detail": "Unit test; S-45's rewritten requirements 2-5 show as removed and added."
       }
     ]
   },
@@ -753,64 +768,84 @@
     ]
   },
   "S-45": {
-    "at": "2026-11-09T13:53:45.789Z",
+    "at": "2026-11-14T06:54:22.571Z",
     "running": false,
     "results": [
       {
-        "name": "No variants: one row of previews; expand opens the larger canvas",
+        "name": "Previews without variants; expand opens the design window",
         "pass": true,
-        "detail": "Scratch board, headless Chrome: S-44 with 3 plain artboards shows Editor, Editor empty file, Phone in one row; the card chip opens the sheet at Designs; expand opens Editor at Fit"
+        "detail": "Unchanged row; expand now calls the window opener."
       },
       {
-        "name": "Variants: one preview per variant; opens the whole board side by side",
+        "name": "Variant previews; whole board",
         "pass": true,
-        "detail": "S-45 with A and B (2 artboards each): row shows 2 variant previews with counts and Open board; the board shows 2 groups, 4 artboards"
+        "detail": "Board copy: Open designs opened the whole board with A and B side by side."
       },
       {
-        "name": "A design's CSS does not change Spill's styles",
+        "name": "Design CSS isolated",
         "pass": true,
-        "detail": "Designs carrying a style tag that sets body and .sheet red and every font to Comic Sans: Spill's body, sheet and card styles unchanged; an img onerror payload did not run"
+        "detail": "Unchanged shadow root rendering."
       },
       {
-        "name": "Zoom, pan, arrow keys and Esc in the larger canvas",
-        "pass": true,
-        "detail": "Fit 93%, 100%, zoom in 125%, drag moved the view by the drag distance, right arrow 3/4 to 4/4, double-click focuses an artboard, Esc closes the canvas and leaves the sheet open"
+        "name": "Native window per spec; reuse; close with project",
+        "pass": false,
+        "detail": "Test app instance on a board copy: a native window 'S-54 designs, Spill' opened beside the board; asking again reused it; S-55 opened its own; close from the page closed it. Not verified: closing the project window closes its design windows, and the Window menu entries (no accessibility access to drive the app)."
       },
       {
-        "name": "An MCP edit shows in the open sheet and canvas without a reload",
+        "name": "Browser opens its own URL in a named tab",
         "pass": true,
-        "detail": "Edited ab-1 with the canvas open: the preview and the canvas both showed it within a few seconds, same document, no reload; checked in light and dark"
+        "detail": "From spill serve the board calls window.open('/?designs=S-54&view=board', 'spill-designs-S-54'); no modal."
+      },
+      {
+        "name": "Zoom, pan, arrows, Esc in the design window",
+        "pass": true,
+        "detail": "Viewer fills the window with the same controls; Esc closes the window (app: via the server; browser: window.close)."
+      },
+      {
+        "name": "Live edit shows without reload",
+        "pass": true,
+        "detail": "An MCP-style edit on the copy redrew the artboard in the open design window; an unsent comment survived a reload."
       }
     ]
   },
   "S-46": {
-    "at": "2026-11-13T17:27:12.803Z",
+    "at": "2026-11-14T06:47:49.712Z",
     "running": false,
     "results": [
       {
-        "name": "1. A pin reaches the inbox with its number and note; spill_design_feedback returns its position",
+        "name": "Shift+click pins in both views; a plain click does not",
         "pass": true,
-        "detail": "Unit test: design_pin inbox line and Pin 1 at (120, 80)."
+        "detail": "Board copy: on a single artboard a plain click opened no note box, Shift+click did; the pin saved with its position and reached the inbox as design_pin."
       },
       {
-        "name": "2. Accept A and reject B show both statuses; Approve waits for an accepted design",
+        "name": "Cursor: comment cursor only with Shift",
         "pass": true,
-        "detail": "Unit tests; unchanged since the first build."
+        "detail": "Without Shift the single artboard shows the pan cursor (crosshair gone); the Shift rule is shared by both views."
       },
       {
-        "name": "3. Claude's reply on a pin shows in the viewer",
+        "name": "No Accept or Reject in the viewer",
         "pass": true,
-        "detail": "Board copy: replies show under open notes."
+        "detail": "Board copy: the panel has no buttons, only notes and the comment box."
       },
       {
-        "name": "4. Resolving clears a pin from the artboard and panel, and a comment from the panel; a new pin fits the same spot",
+        "name": "Design question options and approval",
         "pass": true,
-        "detail": "Board copy, S-49: pin 2 and comment c-1 showed; after Claude resolved both, the artboard had no pins and the panel read 'No notes yet'. Unit test: a new pin at the same spot gets n=2."
+        "detail": "Board copy: Q-44 offered Variant A, Variant B, Needs changes; answering B auto-approved S-54 (design approved (variant B)). A spec without variants gets Approve this design / Needs changes (unit test and Q-45)."
       },
       {
-        "name": "5. spill_design_feedback shows only open notes plus a resolved count",
+        "name": "Approve gated; Open designs link",
         "pass": true,
-        "detail": "Unit tests: resolved pin and comment not listed; '1 open note, 1 resolved.' and '0 open notes, 2 resolved.'"
+        "detail": "Card Approve disabled with 'Answer Q-44 to approve'; Open designs on the question opened the viewer."
+      },
+      {
+        "name": "Replies and resolve",
+        "pass": true,
+        "detail": "Existing tests pass."
+      },
+      {
+        "name": "Feedback lists open notes and chosen state",
+        "pass": true,
+        "detail": "spill_design_feedback shows 'Variant B: chosen'; sheet, viewer label and the v1 snapshot mark B Chosen."
       }
     ]
   },
@@ -874,6 +909,58 @@
         "name": "5. No todo list yet shows 'No todo list yet'",
         "pass": true,
         "detail": "Board copy, before any todos were recorded."
+      }
+    ]
+  },
+  "S-49": {
+    "at": "2026-11-13T20:23:07.070Z",
+    "running": false,
+    "results": [
+      {
+        "name": "1. New spec v1; approved then changed shows 'v2 new'; approved again shows 'v2'",
+        "pass": true,
+        "detail": "Unit test. Board copy: S-46 put back for approval read 'v3 NEW' on the card, with the tooltip 'v3, waiting for approval. v2 approved 2h ago'."
+      },
+      {
+        "name": "2. Several edits before the next approval keep 'v2 new'; compare list shows them as edits of v2",
+        "pass": true,
+        "detail": "Unit test (1.1 1.2 2.1 2.2). Board copy compare menu: 'v1, edit 1 ... v2, edit 2 Approved version'."
+      },
+      {
+        "name": "3. Sheet header, spill_get and spill_board show the same version as the card",
+        "pass": true,
+        "detail": "Sheet header 'Draft | v3 NEW'; spill_get first line 'S-46 v2 (spec, done)'; spill_board 'S-46 done v2'."
+      },
+      {
+        "name": "4. A design snapshot from the v2 approval is labeled v2",
+        "pass": true,
+        "detail": "API on the test board: each snapshot carries the version of the text it was taken with (S-48 snapshot v1 while its text is now v2)."
+      }
+    ]
+  },
+  "S-53": {
+    "at": "2026-11-14T06:27:36.608Z",
+    "running": false,
+    "results": [
+      {
+        "name": "Propose and delete a draft spec",
+        "pass": true,
+        "detail": "On a board copy, proposing S-50 opened Q-41; answering A in the app removed S-50 and its links, logged 'deleted S-50: ...', and the canvas dropped it live. Unit test also covers blocking-only questions and focus."
+      },
+      {
+        "name": "Answer B keeps the card",
+        "pass": true,
+        "detail": "Unit test: the spec stays draft."
+      },
+      {
+        "name": "Done, active and queued are refused",
+        "pass": true,
+        "detail": "Unit test: queued and active refused; done points to spill_propose_replace."
+      },
+      {
+        "name": "Deleted id is not reused",
+        "pass": true,
+        "detail": "Unit test: next spec after deleting S-2 is S-3."
       }
     ]
   }

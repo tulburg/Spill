@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { Board } from "../src/board";
 import { Designs } from "../src/designs";
 import { handle } from "../src/mcp";
+import { lineDiff } from "../src/diff";
 import { Store, formatCard, parseCard } from "../src/store";
 
 const REPO_SPILL = join(import.meta.dir, "..", ".spill");
@@ -91,6 +92,29 @@ describe("status rules", () => {
   test("statuses must fit the card kind", () => {
     const q = claude.ask({ title: "q" });
     expect(() => claude.setStatus({ id: q.id, status: "active" })).toThrow(/not a question status/);
+  });
+
+  test("spec versions count approval rounds, not edits (S-49)", () => {
+    const c = claude.draftSpec({ title: "a", body: "one" });
+    expect(claude.versionLabel(c)).toBe("v1");
+    claude.update({ id: c.id, body: "one, edited" });
+    expect(claude.versionLabel(store.get(c.id))).toBe("v1");
+    user.setStatus({ id: c.id, status: "approved" });
+    expect(claude.versionLabel(store.get(c.id))).toBe("v1");
+    claude.update({ id: c.id, body: "two" });
+    // A built spec showing new text is not "new" until it goes back for approval.
+    expect(claude.versionLabel(store.get(c.id))).toBe("v2");
+    claude.setStatus({ id: c.id, status: "draft" });
+    claude.update({ id: c.id, body: "two, edited" });
+    const v = claude.version(store.get(c.id));
+    expect(v).toMatchObject({ v: 2, isNew: true });
+    expect(v.prevApprovedAt).toBeTruthy();
+    expect(claude.versions(store.get(c.id)).map((x) => `${x.v}.${x.edit}`)).toEqual(["1.1", "1.2", "2.1", "2.2"]);
+    user.setStatus({ id: c.id, status: "approved" });
+    expect(claude.versionLabel(store.get(c.id))).toBe("v2");
+    claude.setStatus({ id: c.id, status: "draft" });
+    claude.update({ id: c.id, body: "three" });
+    expect(claude.versionLabel(store.get(c.id))).toBe("v3 new");
   });
 
   test("maxActiveSpecs is enforced", () => {
@@ -261,6 +285,83 @@ describe("branch and replace (S-35)", () => {
   });
 });
 
+describe("inline diff (S-34)", () => {
+  const ops = (d: ReturnType<typeof lineDiff>) => d.map((l) => l.op).join(" ");
+  test("inserting an item marks only it; renumbered items are unchanged", () => {
+    const d = lineDiff("## R\n1. one thing\n2. two thing\n3. three thing", "## R\n1. one thing\n2. new item here\n3. two thing\n4. three thing");
+    expect(ops(d)).toBe("same same add same same");
+    expect(d[3].text).toBe("3. two thing");
+  });
+  test("one word changed shows the line once with word marks", () => {
+    const d = lineDiff("1. The section shows a preview of each artboard", "2. The section shows a row of each artboard");
+    expect(ops(d)).toBe("mod");
+    expect(d[0].segs).toEqual([
+      { op: "same", text: "2. The section shows a " },
+      { op: "del", text: "preview" },
+      { op: "add", text: "row" },
+      { op: "same", text: " of each artboard" },
+    ]);
+  });
+  test("a line rewritten completely is a del and an add", () => {
+    expect(ops(lineDiff("alpha beta gamma delta", "something else entirely here"))).toBe("del add");
+  });
+});
+
+describe("deleting a card (S-53)", () => {
+  test("a delete is a question; A removes the card, its links and its blocking-only questions", () => {
+    const keep = claude.draftSpec({ title: "keep" });
+    const s = claude.draftSpec({ title: "dup", follows: undefined });
+    claude.link({ from: s.id, type: "depends_on", to: keep.id });
+    const only = claude.ask({ title: "only blocks dup", blocks: [s.id] });
+    const shared = claude.ask({ title: "blocks both", blocks: [s.id, keep.id] });
+    claude.setFocus({ discussing: [s.id, keep.id] });
+    expect(() => claude.proposeDelete({ id: s.id, reason: " " })).toThrow("Say why");
+    const q = claude.proposeDelete({ id: s.id, reason: "Duplicate of S-1." });
+    expect(q.title).toBe(`Delete ${s.id}?`);
+    expect(q.body).toContain("Duplicate of S-1.");
+    expect(q.body).toContain("- A. Delete it");
+    expect(q.links).toContainEqual({ type: "deletes", target: s.id });
+    expect(() => claude.proposeDelete({ id: s.id, reason: "again" })).toThrow(`${q.id} already asks`);
+    expect(store.has(s.id)).toBe(true);
+    user.answer({ id: q.id, picks: ["A"] });
+    expect(store.has(s.id)).toBe(false);
+    expect(store.has(only.id)).toBe(false);
+    expect(store.has(shared.id)).toBe(true);
+    expect(store.get(shared.id).links).toEqual([{ type: "blocks", target: keep.id }]);
+    expect(store.get(keep.id).links.some((l) => l.target === s.id)).toBe(false);
+    expect(store.get(q.id).status).toBe("answered");
+    expect(store.get(q.id).links).toContainEqual({ type: "deletes", target: s.id });
+    expect(store.focus()?.discussing).toEqual([keep.id]);
+    const ev = claude.inbox().find((e) => e.action === "delete");
+    expect(ev?.detail).toBe(`deleted ${s.id}: Duplicate of S-1. (with ${only.id})`);
+    expect(claude.draftSpec({ title: "next" }).id).toBe("S-3");
+  });
+
+  test("B keeps the card; done, active and queued specs cannot be proposed", () => {
+    const s = claude.draftSpec({ title: "a" });
+    const q = claude.proposeDelete({ id: s.id, reason: "Not needed." });
+    user.answer({ id: q.id, picks: ["B"] });
+    expect(store.get(s.id).status).toBe("draft");
+    user.setStatus({ id: s.id, status: "approved" });
+    user.build({ id: s.id });
+    expect(() => claude.proposeDelete({ id: s.id, reason: "x" })).toThrow("is queued");
+    claude.setStatus({ id: s.id, status: "active" });
+    expect(() => claude.proposeDelete({ id: s.id, reason: "x" })).toThrow("is active");
+    claude.setStatus({ id: s.id, status: "done" });
+    expect(() => claude.proposeDelete({ id: s.id, reason: "x" })).toThrow("spill_propose_replace");
+  });
+
+  test("a card that moved on before the answer is not deleted", () => {
+    const s = claude.draftSpec({ title: "a" });
+    const q = claude.proposeDelete({ id: s.id, reason: "Not needed." });
+    user.setStatus({ id: s.id, status: "approved" });
+    user.build({ id: s.id });
+    user.answer({ id: q.id, picks: ["A"] });
+    expect(store.has(s.id)).toBe(true);
+    expect(store.get(q.id).comments).toContain("Not deleted");
+  });
+});
+
 describe("spec versions (S-34)", () => {
   const call = (name: string, args: object = {}) =>
     handle(store, { jsonrpc: "2.0", id: 1, method: "tools/call", params: { name, arguments: args } }) as any;
@@ -276,8 +377,9 @@ describe("spec versions (S-34)", () => {
     expect(vs.map((v) => v.actor)).toEqual(["claude", "claude", "claude"]);
     const text = call("spill_get", { id: "S-1" }).result.content[0].text;
     expect(text).toContain("## Changes since the approved version");
-    expect(text).toContain("+3 -1 lines");
-    expect(text).toContain("- 2. two\n");
+    expect(text).toContain("+2 -0 ~1 lines");
+    expect(text).toContain("~ 2. two, faster");
+    expect(text).toContain("+ 3. three");
     expect(text).toContain("+ 4. four");
   });
 
@@ -346,13 +448,13 @@ describe("mcp", () => {
   const call = (name: string, args: object = {}) =>
     handle(store, { jsonrpc: "2.0", id: 1, method: "tools/call", params: { name, arguments: args } }) as any;
 
-  test("initialize and list the 28 tools", () => {
+  test("initialize and list the 29 tools", () => {
     const init = handle(store, { jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2025-06-18" } }) as any;
     expect(init.result.serverInfo.name).toBe("spill");
     const list = handle(store, { jsonrpc: "2.0", id: 2, method: "tools/list" }) as any;
     expect(list.result.tools.map((t: any) => t.name)).toEqual([
       "spill_board", "spill_get", "spill_ask", "spill_draft_spec", "spill_update",
-      "spill_set_status", "spill_comment", "spill_link", "spill_unlink", "spill_record", "spill_files", "spill_propose_replace", "spill_rejections", "spill_focus", "spill_checks", "spill_todos", "spill_reply", "spill_inbox",
+      "spill_set_status", "spill_comment", "spill_link", "spill_unlink", "spill_record", "spill_files", "spill_propose_replace", "spill_propose_delete", "spill_rejections", "spill_focus", "spill_checks", "spill_todos", "spill_reply", "spill_inbox",
       "spill_design_list", "spill_design_create_artboard", "spill_design_write_html", "spill_design_read", "spill_design_update_styles", "spill_design_duplicate", "spill_design_delete", "spill_design_screenshot", "spill_design_feedback", "spill_design_reply",
     ]);
   });
@@ -361,7 +463,7 @@ describe("mcp", () => {
     const c = claude.draftSpec({ title: "a", body: "## Requirements\n1. one\n2. two" });
     expect(call("spill_todos", { id: c.id, items: [{ text: "x" }] }).result.isError).toBe(true);
     user.setStatus({ id: c.id, status: "approved" }), user.build({ id: c.id });
-    claude.setStatus({ id: c.id, status: "active" });
+    expect(call("spill_set_status", { id: c.id, status: "active" }).result.content[0].text).toContain("Next: record your todo list for this build with spill_todos");
     const before = store.events().length;
     const r = call("spill_todos", { id: c.id, items: [{ text: "Store", done: true }, { text: "Tool" }, { text: "UI" }, { text: "Tests" }] });
     expect(r.result.content[0].text).toBe(`${c.id}: 1 of 4 todos done`);
@@ -569,22 +671,36 @@ describe("approval separate from building (S-29)", () => {
     expect(status("S-2")).toBe("draft");
   });
 
-  test("a design question answered A approves with design approved; B does not", () => {
+  test("a design question offers the design or its variants; a pick approves and marks it chosen (S-46)", () => {
+    const call = (name: string, args: object) => handle(store, { jsonrpc: "2.0", id: 1, method: "tools/call", params: { name, arguments: args } }) as any;
     claude.draftSpec({ title: "a" });
     expect(() => claude.ask({ title: "d", design: true })).toThrow(/must block/);
-    const q = claude.ask({ title: "Design for S-1", body: "Board: https://app.paper.design/file/x", blocks: ["S-1"], design: true });
+    expect(() => claude.ask({ title: "d", blocks: ["S-1"], design: true })).toThrow(/no designs yet/);
+    call("spill_design_create_artboard", { spec: "S-1", title: "Home", styles: { width: 400, height: 300 } });
+    expect(() => user.setStatus({ id: "S-1", status: "approved" })).toThrow(/design question/);
+    const q = claude.ask({ title: "Design for S-1", body: "Look it over.\n- A. Yes\n- B. No", blocks: ["S-1"], design: true });
     expect(q.design).toBe(true);
-    expect(q.body).toContain("- A. Approve this design\n- B. Needs changes");
+    expect(q.body.trim()).toBe("Look it over.\n\n- A. Approve this design\n- B. Needs changes");
     expect(parseCard(formatCard(q)).design).toBe(true);
     user.answer({ id: q.id, text: "make it blue" });
     expect(status(q.id)).toBe("open");
     user.answer({ id: q.id, picks: ["A"] });
     expect(status("S-1")).toBe("approved");
     expect(autoLine()).toEqual(["S-1 draft -> approved (auto: design approved)"]);
+    expect(new Designs(store).list("S-1")[0].artboards[0].status).toBe("chosen");
+
     claude.draftSpec({ title: "b" });
-    claude.ask({ title: "Design for S-2", blocks: ["S-2"], design: true });
-    user.answer({ id: "Q-2", picks: ["B"] });
+    call("spill_design_create_artboard", { spec: "S-2", title: "Calm", variant: "A", styles: { width: 400, height: 300 } });
+    call("spill_design_create_artboard", { spec: "S-2", title: "Bold", variant: "B", styles: { width: 400, height: 300 } });
+    const q2 = claude.ask({ title: "Design for S-2", blocks: ["S-2"], design: true });
+    expect(q2.body.trim()).toBe("- A. Variant A: Calm\n- B. Variant B: Bold\n- C. Needs changes");
+    user.answer({ id: q2.id, picks: ["C"] });
     expect(status("S-2")).toBe("draft");
+    const q3 = claude.ask({ title: "Design for S-2, again", blocks: ["S-2"], design: true });
+    user.answer({ id: q3.id, picks: ["B"] });
+    expect(status("S-2")).toBe("approved");
+    expect(new Designs(store).list("S-2")[0].artboards.map((x) => [x.variant, x.status])).toEqual([["A", "waiting"], ["B", "chosen"]]);
+    expect(call("spill_design_feedback", { spec: "S-2" }).result.content[0].text).toContain("Variant B: chosen");
   });
 });
 
@@ -779,31 +895,15 @@ describe("designs", () => {
     expect(u.pin({ spec: "S-1", artboard: a, x: 10, y: 10, text: "Again" }).n).toBe(2);
   });
 
-  test("review: accept and reject per variant; approval waits for an accepted design; nothing is deleted", () => {
+  test("review: no accept or reject in the viewer; old review records are not shown", () => {
     call("spill_design_create_artboard", { spec: "S-1", title: "Home", variant: "A", styles: { width: 400, height: 300 } });
     call("spill_design_create_artboard", { spec: "S-1", title: "Home", variant: "B", styles: { width: 400, height: 300 } });
-    const u = new Designs(store, "user");
-    expect(() => new Designs(store, "claude").review({ spec: "S-1", variant: "A", status: "accepted" })).toThrow(/Only the user/);
-    expect(() => u.review({ spec: "S-1", variant: "B", status: "rejected" })).toThrow(/reason/);
-    u.review({ spec: "S-1", variant: "B", status: "rejected", reason: "Too busy\nand dark" });
-    expect(() => user.setStatus({ id: "S-1", status: "approved" })).toThrow(/designs waiting for review/);
-    u.review({ spec: "S-1", variant: "A", status: "accepted" });
-    expect(new Designs(store).list("S-1")[0].artboards.map((x) => [x.variant, x.status])).toEqual([["A", "accepted"], ["B", "rejected"]]);
-    expect(call("spill_design_feedback", { spec: "S-1" })).toContain("Variant B: rejected: Too busy\nand dark");
-    user.setStatus({ id: "S-1", status: "approved" });
-    expect(store.get("S-1").status).toBe("approved");
-    expect(readdirSync(designDir()).filter((f) => f.endsWith(".html"))).toHaveLength(2);
-  });
-
-  test("review: a spec without variants is accepted as a whole", () => {
-    call("spill_design_create_artboard", { spec: "S-1", title: "One", styles: { width: 400, height: 300 } });
-    call("spill_design_create_artboard", { spec: "S-1", title: "Two", styles: { width: 400, height: 300 } });
-    const u = new Designs(store, "user");
-    expect(() => user.setStatus({ id: "S-1", status: "approved" })).toThrow(/designs waiting/);
-    u.review({ spec: "S-1", status: "accepted" });
-    expect(new Designs(store).list("S-1")[0].artboards.map((x) => x.status)).toEqual(["accepted", "accepted"]);
-    expect(call("spill_design_feedback", { spec: "S-1" })).toMatch(/^Design: accepted/);
-    user.setStatus({ id: "S-1", status: "approved" });
+    const f = join(designDir(), "feedback.json");
+    writeFileSync(f, JSON.stringify({ next: 1, nextNote: 1, pins: [], notes: [], reviews: { A: { status: "accepted", at: "x" } } }));
+    expect((new Designs(store, "user") as any).review).toBeUndefined();
+    expect(new Designs(store).list("S-1")[0].artboards.map((x) => x.status)).toEqual(["waiting", "waiting"]);
+    expect(() => user.setStatus({ id: "S-1", status: "approved" })).toThrow(/design question/);
+    expect(JSON.parse(readFileSync(f, "utf8")).reviews.A.status).toBe("accepted");
   });
 
   // S-47
@@ -812,9 +912,10 @@ describe("designs", () => {
     call("spill_design_write_html", { spec: "S-1", target: ab, mode: "insert-children", html: "<p>Before</p>" });
     const u = new Designs(store, "user");
     u.pin({ spec: "S-1", artboard: ab, x: 10, y: 20, text: "Bigger" });
-    u.review({ spec: "S-1", status: "accepted" });
     expect(new Designs(store).snapshots("S-1")).toHaveLength(0);
-    user.setStatus({ id: "S-1", status: "approved" });
+    const q = claude.ask({ title: "Design", blocks: ["S-1"], design: true });
+    user.answer({ id: q.id, picks: ["A"] });
+    expect(store.get("S-1").status).toBe("approved");
     const [ref] = new Designs(store).snapshots("S-1");
     expect(ref.seq).toBe(store.events().length - 1);
     expect(store.events()[ref.seq].detail).toMatch(/-> approved/);
@@ -823,7 +924,8 @@ describe("designs", () => {
     const snap = new Designs(store).readSnapshot(ref.hash)!;
     expect(snap.artboards[0].html).toContain("Before");
     expect(snap.artboards[0].html).not.toContain("After");
-    expect(snap.artboards[0].status).toBe("accepted");
+    expect(snap.artboards[0].status).toBe("chosen");
+    expect(snap.feedback.chosen?.variant).toBe("");
     expect(snap.feedback.pins[0].resolved).toBeUndefined();
     expect(new Designs(store).htmlHashes("S-1")[ab]).not.toBe(snap.artboards[0].h);
     expect(readdirSync(join(dir, "versions", "designs", "blobs"))).toEqual([`${ref.hash}.json`]);

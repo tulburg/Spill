@@ -236,6 +236,12 @@ export class Store {
     writeFileSync(join(this.cardsDir, `${card.id}.md`), formatCard(card));
   }
 
+  // S-53: remove a card's file. Its number is never reused (nextId keeps the highest).
+  remove(id: string): void {
+    const p = join(this.cardsDir, `${id}.md`);
+    if (existsSync(p)) rmSync(p);
+  }
+
   // Next free ID for a kind. Never reuses a number, even if its file was removed.
   nextId(kind: Kind): string {
     const prefix = PREFIX[kind];

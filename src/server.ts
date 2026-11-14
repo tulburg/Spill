@@ -1,4 +1,5 @@
 import { existsSync, mkdirSync, readFileSync, statSync, watch, writeFileSync } from "node:fs";
+import { connect } from "node:net";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { Board } from "./board";
@@ -21,6 +22,24 @@ function readSettings(): { theme: string } {
     return { theme: "system" };
   }
 }
+
+// S-45: ask the Spill app for a native design window over its socket (~/.spill/app.sock). Resolves
+// false when no app is listening, so the page opens a browser tab instead.
+function tellApp(line: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    const sock = connect(join(homedir(), ".spill", "app.sock"));
+    let got = "";
+    const done = (ok: boolean) => (sock.destroy(), resolve(ok));
+    sock.setTimeout(1500, () => done(false));
+    sock.on("error", () => done(false));
+    sock.on("connect", () => sock.write(`${line}\n`));
+    sock.on("data", (d) => {
+      got += d.toString();
+      if (got.includes("\n")) done(got.startsWith("ok"));
+    });
+  });
+}
+const clean = (v: unknown) => String(v ?? "").replace(/[\t\n]/g, "");
 
 async function bundle(): Promise<string> {
   const out = await Bun.build({ entrypoints: [join(UI_DIR, "main.ts")], target: "browser" });
@@ -53,8 +72,12 @@ export async function startServer(store: Store, port = 4747) {
         .all()
         .filter((c) => c.kind === "spec")
         .map((c) => {
-          const vs = store.versions(c.id);
-          const snaps = new Designs(store).snapshots(c.id).map((r) => ({ ...r, version: vs.findLastIndex((v) => (v.seq !== undefined ? v.seq <= r.seq : v.at <= r.at)) }));
+          const vs = new Board(store, "user").versions(c);
+          // S-49: label a snapshot with the approval-round version of the text it was taken with.
+          const snaps = new Designs(store).snapshots(c.id).map((r) => {
+            const i = vs.findLastIndex((v) => (v.seq !== undefined ? v.seq <= r.seq : v.at <= r.at));
+            return { ...r, version: i, v: i >= 0 ? vs[i].v : 1 };
+          });
           return [c.id, snaps];
         })
         .filter(([, snaps]) => (snaps as unknown[]).length),
@@ -95,7 +118,7 @@ export async function startServer(store: Store, port = 4747) {
       "/app.css": () => new Response(Bun.file(join(UI_DIR, "app.css"))),
       "/logo.svg": () => new Response(Bun.file(join(UI_DIR, "logo.svg")), { headers: { "content-type": "image/svg+xml" } }),
       "/app.js": async () => new Response(await bundle(), { headers: { "content-type": "text/javascript" } }),
-      "/api/board": () => json({ project: store.config().project, cards: store.all(), focus: store.focus(), checks: store.checks(), todos: store.todos(), files: store.files(), rejections: new Board(store, "user").rejections().map((r) => ({ id: r.card.id, reason: r.reason, at: r.at })), events: store.events().slice(-200), versions: Object.fromEntries(store.all().filter((c) => c.kind === "spec" && store.versions(c.id).length).map((c) => [c.id, new Board(store, "user").versions(c)])), messages: store.events().filter((e) => e.card === "-" && (e.action === "message" || e.action === "reply")), messageState: store.messageState(), root: dirname(store.dir), designs: designSummary(), feedback: feedbackSummary(), approvedDesigns: approvedSummary() }),
+      "/api/board": () => json({ project: store.config().project, cards: store.all(), focus: store.focus(), checks: store.checks(), todos: store.todos(), files: store.files(), rejections: new Board(store, "user").rejections().map((r) => ({ id: r.card.id, reason: r.reason, at: r.at })), events: store.events().slice(-200), versions: Object.fromEntries(store.all().filter((c) => c.kind === "spec" && store.versions(c.id).length).map((c) => [c.id, new Board(store, "user").versions(c)])), messages: store.events().filter((e) => e.card === "-" && (e.action === "message" || e.action === "reply")), messageState: store.messageState(), root: dirname(store.dir), designs: designSummary(), feedback: feedbackSummary(), approvedDesigns: approvedSummary(), specVersions: Object.fromEntries(store.all().filter((c) => c.kind === "spec").map((c) => [c.id, new Board(store, "user").version(c)])) }),
       // S-45: one artboard's HTML, for the spec viewer's previews and larger canvas.
       "/api/designs/:spec/:id": (req) => {
         const { spec, id } = req.params;
@@ -103,7 +126,7 @@ export async function startServer(store: Store, port = 4747) {
         const f = join(store.dir, "designs", spec, `${id}.html`);
         return existsSync(f) ? new Response(Bun.file(f), { headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store" } }) : new Response("Not found", { status: 404 });
       },
-      // S-46: review a spec's designs: feedback, pins, comments, replies, accept and reject.
+      // S-46: review a spec's designs: feedback, pins, comments and replies.
       "/api/designs/:spec/feedback": (req) => {
         try {
           return json(new Designs(store, "user").feedback(req.params.spec));
@@ -119,7 +142,23 @@ export async function startServer(store: Store, port = 4747) {
       "/api/designs/:spec/pin": { POST: (req) => act(req, (b) => new Designs(store, "user").pin({ spec: req.params.spec, artboard: b.artboard, x: b.x, y: b.y, text: b.text })) },
       "/api/designs/:spec/comment": { POST: (req) => act(req, (b) => new Designs(store, "user").note({ spec: req.params.spec, variant: b.variant, text: b.text })) },
       "/api/designs/:spec/reply": { POST: (req) => act(req, (b) => new Designs(store, "user").reply({ spec: req.params.spec, pin: b.pin, comment: b.comment, text: b.text })) },
-      "/api/designs/:spec/review": { POST: (req) => act(req, (b) => new Designs(store, "user").review({ spec: req.params.spec, variant: b.variant, status: b.status, reason: b.reason })) },
+      // S-45: open (or bring forward) this spec's design window in the desktop app, or close it.
+      "/api/designs-window": {
+        POST: async (req) => {
+          const b = await req.json().catch(() => ({}));
+          if (!/^S-\d+$/.test(b.spec ?? "")) return json({ error: "Bad spec" }, 400);
+          const view = b.view === "one" ? "one" : "board";
+          const ok = await tellApp(["designs", dirname(store.dir), b.spec, view, clean(b.id), clean(b.snap)].join("\t"));
+          return ok ? json({ ok: true }) : json({ error: "No Spill app" }, 404);
+        },
+      },
+      "/api/designs-window/close": {
+        POST: async (req) => {
+          const b = await req.json().catch(() => ({}));
+          if (!/^S-\d+$/.test(b.spec ?? "")) return json({ error: "Bad spec" }, 400);
+          return (await tellApp(["close-designs", dirname(store.dir), b.spec].join("\t"))) ? json({ ok: true }) : json({ error: "No Spill app" }, 404);
+        },
+      },
       "/api/stream": () => {
         let ctl: ReadableStreamDefaultController;
         return new Response(

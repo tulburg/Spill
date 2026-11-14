@@ -16,7 +16,8 @@ interface BoardData {
   messages?: SpillEvent[];
   root?: string;
   // S-34: versions of every spec whose text has changed, oldest first.
-  versions?: Record<string, (Version & { approved: boolean })[]>;
+  versions?: Record<string, (Version & { approved: boolean; v?: number; edit?: number })[]>;
+  specVersions?: Record<string, { v: number; isNew: boolean; prevApprovedAt?: string }>;
   // S-35: the files Claude recorded building each spec.
   files?: Record<string, { path: string; change: "new" | "changed" | "removed" }[]>;
   // S-45: each spec's artboards, with v changing whenever an artboard's file does.
@@ -811,11 +812,11 @@ function specActions(c: Card, draft?: () => string): HTMLElement | null {
     approve.disabled = true;
     approve.title = "Answer the open questions first";
   }
-  // S-46: designs waiting for review hold approval until the design (or a variant) is accepted.
+  // S-46: a spec with designs is approved through its design question, not from here.
   const designGate = !building && !openQs.length && awaitingDesign(c.id);
   if (designGate) {
     approve.disabled = true;
-    approve.title = "Accept the design or a variant first";
+    approve.title = "Approved through its design question";
   }
   approve.onclick = async () => {
     approve.disabled = reject.disabled = true;
@@ -876,7 +877,7 @@ function specActions(c: Card, draft?: () => string): HTMLElement | null {
       ? [h("div", { class: "gate" }, "Answer ", openQs.flatMap((q, i) => [i ? (i === openQs.length - 1 ? " and " : ", ") : "", h("button", { class: "qid", onclick: () => panTo(q.id) }, q.id)]), " to approve")]
       : []),
     ...(designGate
-      ? [h("div", { class: "gate" }, `Accept the design${variantsOf(c.id).length ? " or a variant" : ""} first. `, h("button", { class: "qid", onclick: () => openViewer(c.id, variantsOf(c.id).length ? "board" : "one") }, variantsOf(c.id).length ? "Open board" : "Open design"), " to review.")]
+      ? [h("div", { class: "gate" }, "Its designs are signed off by a design question; Claude asks one. ", h("button", { class: "qid", onclick: () => openDesigns(c.id, variantsOf(c.id).length ? "board" : "one") }, "Open designs"))]
       : []),
     err,
   );
@@ -920,6 +921,16 @@ function branches(c: Card) {
   const under = (p: string, kind: string) => data.cards.filter((k) => k.kind === kind && parentOf(k) === p);
   const qs = under(c.id, "question");
   return { open: qs.filter(isOpen), decisions: qs.flatMap((q) => under(q.id, "decision")), specs: under(c.id, "spec") };
+}
+// S-46: a design question links to the designs of the spec it signs off, in the viewer (or to an
+// outside board link in older questions).
+function designLink(c: Card): HTMLElement | null {
+  if (!c.design) return null;
+  const spec = linksOf(c, "blocks")[0];
+  if (spec && designsOf(spec).length)
+    return h("button", { class: "opendesign", onclick: (e: Event) => (e.stopPropagation(), openDesigns(spec, variantsOf(spec).length ? "board" : "one")) }, "Open designs");
+  const url = designBoards(c)[0];
+  return url ? h("a", { class: "opendesign", href: url, target: "_blank", onclick: (e: Event) => e.stopPropagation() }, "Open design") : null;
 }
 function designBoards(c: Card): string[] {
   return [...new Set(c.body.match(/https?:\/\/(?:[\w-]+\.)*(?:paper\.design|figma\.com)\/[^\s)>\]]*/g) ?? [])];
@@ -1042,6 +1053,7 @@ function specCard(c: Card): HTMLElement {
       c.status === "discussing" && commentCount(c) ? h("span", { class: "ccount", title: "Comments" }, svg(MSG_ICON.replace('width="16" height="16"', 'width="12" height="12"')), String(commentCount(c))) : null,
       h("span", { class: "sp" }),
       status,
+      verTag(c),
     ),
     h("div", { style: "display:flex;flex-direction:column;gap:4px" }, h("div", { class: "title" }, c.title), active ? latestLine(c) : whyLine(c) ? h("div", { class: "why" }, whyLine(c)) : null),
     active ? buildProgress(c) : facts.length ? h("div", { class: "facts" }, facts.slice(0, 3)) : null,
@@ -1202,7 +1214,7 @@ function questionCard(c: Card): HTMLElement {
       h("span", { class: "sp" }),
       h("span", { class: "status" }, statusText),
     ),
-    c.design && designBoards(c).length ? h("a", { class: "opendesign", href: designBoards(c)[0], target: "_blank", onclick: (e: Event) => e.stopPropagation() }, "Open design") : null,
+    designLink(c),
     h("div", { class: "title" }, c.title),
     open && !opts.length && intro ? h("div", { class: "proposal" }, h("span", { class: "k" }, "Context"), h("span", {}, intro)) : null,
     open ? (redirectNote(c) !== null ? redirectBox(redirectNote(c)!) : answerForm(c, opts)) : answer ? answeredView(c, opts, answer) : null,
@@ -1397,7 +1409,8 @@ interface Artboard {
   variant: string;
   width: string;
   height: string;
-  status: "waiting" | "accepted" | "rejected";
+  // S-46: "chosen" once the design question picked it. Older snapshots may say accepted or rejected.
+  status: "waiting" | "chosen" | "accepted" | "rejected";
   v: number;
   // S-47: the HTML's hash; a snapshot's artboards also carry their HTML.
   h?: string;
@@ -1408,10 +1421,11 @@ interface SnapRef {
   seq: number;
   hash: string;
   version: number;
+  v?: number;
 }
 interface Snapshot {
   artboards: Artboard[];
-  feedback: { pins: DPin[]; notes: DNote[]; reviews: DesignFeedback["reviews"] };
+  feedback: { pins: DPin[]; notes: DNote[]; reviews: DesignFeedback["reviews"]; chosen?: { variant: string } };
 }
 const designsOf = (id: string): Artboard[] => data.designs?.[id] ?? [];
 const px = (v: string) => Math.max(1, parseFloat(v) || 1);
@@ -1437,7 +1451,8 @@ function snapshotFor(spec: string, hash: string): Snapshot | null {
   return null;
 }
 const snapRefs = (spec: string): SnapRef[] => data.approvedDesigns?.[spec] ?? [];
-const snapLabel = (r: SnapRef) => (r.version >= 0 ? `v${r.version + 1}` : "Approved");
+// S-49: snapshots carry the approval-round version of the text they were taken with.
+const snapLabel = (r: SnapRef) => (r.v ? `v${r.v}` : r.version >= 0 ? `v${r.version + 1}` : "Approved");
 // Which designs the Overview shows: the user's pick, else the approved snapshot of the version being
 // compared with, else today's.
 const designSel = new Map<string, string>();
@@ -1525,7 +1540,8 @@ function fitScale(a: Artboard, maxW: number, maxH: number) {
 const EXPAND_ICON = `<svg width="12" height="12" viewBox="0 0 12 12"><path d="M7 1.5h3.5V5M5 10.5H1.5V7M10.5 1.5L7 5M1.5 10.5L5 7" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 const BOARD_ICON = `<svg width="12" height="12" viewBox="0 0 12 12"><rect x="1" y="2" width="4" height="8" rx="1" fill="none" stroke="currentColor" stroke-width="1.2"/><rect x="7" y="2" width="4" height="8" rx="1" fill="none" stroke="currentColor" stroke-width="1.2"/></svg>`;
 const DESIGN_ICON = `<svg width="11" height="11" viewBox="0 0 11 11"><rect x="1" y="1.5" width="9" height="8" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.2"/><path d="M1 7l2.5-2.5L6 7l1.5-1.5L10 8" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linejoin="round"/></svg>`;
-const STATUS_LABEL = { waiting: "Waiting", accepted: "Accepted", rejected: "Rejected" } as const;
+// S-46: the only status a design shows is the variant (or whole design) its design question chose.
+const isChosen = (st: string) => st === "chosen" || st === "accepted";
 
 function thumb(spec: string, a: Artboard, onopen: () => void, badge?: string): HTMLElement {
   const TH = 112;
@@ -1547,7 +1563,7 @@ function designsSection(c: Card): HTMLElement | null {
   const boards = ref ? (snap?.artboards ?? []) : designsOf(c.id);
   if (!boards.length && !refs.length) return null;
   const variants = variantsIn(boards);
-  const open = (mode: "one" | "board", id?: string) => openViewer(c.id, mode, id, false, ref?.hash);
+  const open = (mode: "one" | "board", id?: string) => openDesigns(c.id, mode, id, ref?.hash);
   const count = variants.length ? `${variants.length} variants, ${boards.length} artboard${boards.length === 1 ? "" : "s"}` : String(boards.length);
   const row = variants.length
     ? variants.map((v) => {
@@ -1557,7 +1573,7 @@ function designsSection(c: Card): HTMLElement | null {
           "div",
           { class: "dz-item" },
           thumb(c.id, first, () => open("board"), `${set.length} artboard${set.length === 1 ? "" : "s"}`),
-          h("div", { class: "dz-cap var" }, h("span", { class: "dz-letter" }, v), h("span", { class: "dz-name" }, first.title), h("span", { class: `dz-st ${first.status}` }, h("i", {}), STATUS_LABEL[first.status])),
+          h("div", { class: "dz-cap var" }, h("span", { class: "dz-letter" }, v), h("span", { class: "dz-name" }, first.title), isChosen(first.status) ? h("span", { class: "dz-st chosen" }, svg(CHECK_ICON), "Chosen") : null),
         );
       })
     : boards.map((a) =>
@@ -1582,12 +1598,12 @@ function designsSection(c: Card): HTMLElement | null {
       h("span", { class: "dz-label" }, "Designs"),
       boards.length ? h("span", { class: "dz-n" }, count) : null,
       h("span", { class: "sp" }),
-      // S-46: without variants the design is reviewed as a whole.
-      variants.length || !boards.length || ref ? null : reviewPill(boards[0].status, true),
+      // S-46: without variants the design is signed off as a whole.
+      variants.length || !boards.length || ref ? null : reviewPill(boards[0].status),
       variants.length ? h("button", { class: "dz-btn", onclick: () => open("board") }, svg(BOARD_ICON), "Open board") : null,
       sw,
     ),
-    ref ? h("div", { class: "dz-lock" }, svg(LOCK_ICON), `As approved ${ago(ref.at)}${ref.version >= 0 ? ` (${snapLabel(ref)})` : ""}, read only. Statuses and pins as they were.`) : null,
+    ref ? h("div", { class: "dz-lock" }, svg(LOCK_ICON), `As approved ${ago(ref.at)}${ref.version >= 0 ? ` (${snapLabel(ref)})` : ""}, read only. Pins as they were.`) : null,
     boards.length ? h("div", { class: "dz-row" }, row) : ref && !snap ? null : h("div", { class: "dz-empty" }, "No designs now."),
   );
 }
@@ -1622,13 +1638,10 @@ function designChanges(c: Card, ref: SnapRef): HTMLElement | null {
     const resolved = fbNow.pins.filter((p) => p.artboard === a.id && p.resolved && !snap.feedback.pins.some((q) => q.n === p.n && q.resolved)).length;
     line("edit", `${named(a, vn)} edited`, resolved ? h("span", { class: "dzc-meta" }, `${resolved} pin${resolved === 1 ? "" : "s"} resolved`) : null);
   }
-  // Status changes per variant, or for the whole design.
-  const keys = [...new Set([...(vb.length ? vb : [""]), ...(vn.length ? vn : [""])])].filter((k) => (vb.length ? vb : [""]).includes(k) && (vn.length ? vn : [""]).includes(k));
-  for (const k of keys) {
-    const was = snap.feedback.reviews[k]?.status ?? "waiting";
-    const is = feedbackOf(c.id).reviews[k]?.status ?? "waiting";
-    if (was !== is) line("", k ? `Variant ${k}` : "Design", reviewPill(was), svg(ARROW_ICON), reviewPill(is));
-  }
+  // S-46: the chosen variant (or the whole design), when it changed.
+  const was = snap.feedback.chosen;
+  const is = fbNow.chosen;
+  if ((was?.variant ?? null) !== (is?.variant ?? null)) line("", is ? (is.variant ? `Variant ${is.variant} chosen` : "Design chosen") : "No design chosen now", was ? h("span", { class: "dzc-meta" }, `was ${was.variant ? `variant ${was.variant}` : "the design"}`) : null);
   return h("div", { class: "dz-changes" }, h("div", { class: "dh" }, `Designs since ${snapLabel(ref)}`), rows.length ? rows : h("div", { class: "fold" }, "Designs unchanged"));
 }
 const ARROW_ICON = `<svg width="10" height="10" viewBox="0 0 10 10"><path d="M2 5h6M5.5 2.5L8 5 5.5 7.5" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
@@ -1669,24 +1682,23 @@ interface DesignFeedback {
   pins: DPin[];
   notes: DNote[];
   reviews: Record<string, { status: "accepted" | "rejected"; reason?: string; at: string }>;
+  chosen?: { variant: string; at: string };
   pinKey: Record<number, string>;
 }
 const feedbackOf = (spec: string): DesignFeedback => data.feedback?.[spec] ?? { pins: [], notes: [], reviews: {}, pinKey: {} };
 const keyOfBoard = (spec: string, a: Artboard) => (variantsIn(vBoards(spec)).includes(a.variant) ? a.variant : "");
-// True while a spec has designs and none is accepted: Approve waits, like open questions.
-const awaitingDesign = (spec: string) => designsOf(spec).length > 0 && !designsOf(spec).some((a) => a.status === "accepted");
+// S-46: true while a spec has designs and its design question has not chosen one: Approve waits.
+const awaitingDesign = (spec: string) => designsOf(spec).length > 0 && !feedbackOf(spec).chosen;
 
 // Drafts live outside the DOM so live redraws keep the text, the focus and the caret.
 let review: {
   sel: string;
   comment: string;
   pin: { ab: string; x: number; y: number; text: string } | null;
-  rejecting: string | null;
-  reason: string;
   focus: "" | "comment" | "pin" | "reason";
   active: number;
   err: string;
-} = { sel: "", comment: "", pin: null, rejecting: null, reason: "", focus: "", active: 0, err: "" };
+} = { sel: "", comment: "", pin: null, focus: "", active: 0, err: "" };
 
 // A textarea bound to a review draft: grows with its text, keeps focus over redraws.
 function draftBox(kind: "comment" | "pin" | "reason", placeholder: string, get: () => string, set: (v: string) => void, onsend: () => void, rows = 1): HTMLTextAreaElement {
@@ -1700,6 +1712,7 @@ function draftBox(kind: "comment" | "pin" | "reason", placeholder: string, get: 
   input.oninput = () => {
     set(input.value);
     grow();
+    saveDraft();
   };
   input.onfocus = () => (review.focus = kind);
   input.onblur = () => setTimeout(() => input.isConnected && review.focus === kind && document.activeElement !== input && (review.focus = ""), 0);
@@ -1713,7 +1726,7 @@ function draftBox(kind: "comment" | "pin" | "reason", placeholder: string, get: 
       e.preventDefault();
       e.stopPropagation();
       if (kind === "pin") review.pin = null;
-      if (kind === "reason") review.rejecting = null;
+      saveDraft();
       review.focus = "";
       input.blur();
       render();
@@ -1740,6 +1753,7 @@ async function savePin(spec: string) {
   review.pin = null;
   review.focus = "";
   if (!(await reviewPost(spec, "pin", { artboard: p.ab, x: p.x, y: p.y, text: p.text }))) review.pin = p;
+  saveDraft();
   render();
 }
 
@@ -1749,22 +1763,15 @@ async function sendComment(spec: string, key: string) {
   review.comment = "";
   render();
   if (!(await reviewPost(spec, "comment", { variant: key, text }))) review.comment = text;
-}
-
-async function setReview(spec: string, key: string, status: "accepted" | "rejected" | "waiting", reason?: string) {
-  if (await reviewPost(spec, "review", { variant: key, status, reason })) {
-    review.rejecting = null;
-    review.reason = "";
-    review.focus = "";
-    render();
-  }
+  saveDraft();
 }
 
 const CHECK_ICON = `<svg width="10" height="10" viewBox="0 0 10 10"><path d="M2 5.2l2 2 4-4.4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 const NOTE_ICON = `<svg width="10" height="10" viewBox="0 0 10 10"><path d="M1.5 2.2c0-.4.3-.7.7-.7h5.6c.4 0 .7.3.7.7v3.9c0 .4-.3.7-.7.7H4L2.2 8.5V6.8h0c-.4 0-.7-.3-.7-.7z" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linejoin="round"/></svg>`;
 
-function reviewPill(st: "waiting" | "accepted" | "rejected", long = false): HTMLElement {
-  return h("span", { class: `dzr-pill ${st}` }, st === "accepted" ? svg(CHECK_ICON) : st === "waiting" ? h("i", {}) : null, st === "waiting" ? (long ? "Waiting for review" : "Waiting") : STATUS_LABEL[st]);
+// S-46: "Chosen" on the variant (or design) the design question picked; nothing otherwise.
+function reviewPill(st: string): HTMLElement | null {
+  return isChosen(st) ? h("span", { class: "dzr-pill chosen" }, svg(CHECK_ICON), "Chosen") : null;
 }
 
 // Pins on one artboard, positioned in its own pixels; they keep their size at any zoom.
@@ -1806,55 +1813,25 @@ function pinsOn(spec: string, a: Artboard, interactive: boolean): HTMLElement[] 
   return out;
 }
 
-// The panel beside the canvas: Accept and Reject, then pins and comments, then a comment box.
+// The panel beside the canvas: pins and comments, then a comment box. Sign-off is the design question (S-46).
 function reviewPanel(spec: string, key: string, mode: "one" | "board"): HTMLElement {
   const fb = vFeedback(spec);
   const boards = vBoards(spec);
   const variants = variantsIn(boards);
   const readOnly = !!viewer?.snap;
-  const r = fb.reviews[key];
-  const st = r?.status ?? "waiting";
   const first = boards.find((a) => keyOfBoard(spec, a) === key);
+  const st = first?.status ?? "waiting";
   const where = key ? `variant ${key}` : "the design";
 
   const head = h(
     "div",
     { class: "dzr-head" },
-    h("div", { class: "dzr-title" }, key ? [h("span", { class: "dz-letter" }, key), h("span", {}, first?.title ?? `Variant ${key}`)] : h("span", { class: "dzr-label" }, "Design"), h("span", { class: "sp" }), reviewPill(st, true)),
+    h("div", { class: "dzr-title" }, key ? [h("span", { class: "dz-letter" }, key), h("span", {}, first?.title ?? `Variant ${key}`)] : h("span", { class: "dzr-label" }, "Design"), h("span", { class: "sp" }), reviewPill(st)),
   );
   if (readOnly) {
-    // S-47: an approved snapshot: the status as it was, and today's beside it.
-    const nowSt = feedbackOf(spec).reviews[key]?.status ?? "waiting";
+    // S-47: an approved snapshot, read only.
     const ref = snapRefs(spec).find((x) => x.hash === viewer?.snap);
-    head.append(h("div", { class: "dzr-sub" }, `As approved${ref ? ` ${ago(ref.at)}` : ""}. Now: ${STATUS_LABEL[nowSt]}.`));
-    if (st === "rejected" && r?.reason) head.append(h("div", { class: "dzr-why" }, h("b", {}, "Rejected: "), r.reason));
-  } else if (review.rejecting === key) {
-    const box = draftBox("reason", `Why reject ${where}?`, () => review.reason, (v) => (review.reason = v), () => review.reason.trim() && setReview(spec, key, "rejected", review.reason), 3);
-    if (!review.focus) review.focus = "reason";
-    head.append(
-      h("div", { class: "dzr-sub" }, `Reject ${where}. Claude gets the reason; ${key ? "the variant" : "the design"} stays on the spec.`),
-      h("div", { class: "reason reject dzr-reason" }, box),
-      h(
-        "div",
-        { class: "dzr-row" },
-        h("span", { class: "hint" }, "Cmd Enter to send"),
-        h("span", { class: "sp" }),
-        h("button", { class: "btn ghost sm", onclick: () => ((review.rejecting = null), (review.focus = ""), render()) }, "Cancel"),
-        h("button", { class: "btn danger sm", onclick: () => review.reason.trim() && setReview(spec, key, "rejected", review.reason) }, `Reject${key ? ` ${key}` : ""}`),
-      ),
-    );
-  } else {
-    head.append(
-      h(
-        "div",
-        { class: "dzr-actions" },
-        st === "accepted"
-          ? h("button", { class: "btn sm", title: "Take the acceptance back", onclick: () => setReview(spec, key, "waiting") }, "Undo accept")
-          : h("button", { class: "btn primary sm", onclick: () => setReview(spec, key, "accepted") }, `Accept${key ? ` ${key}` : ""}`),
-        h("button", { class: "btn sm", onclick: () => ((review.rejecting = key), (review.reason = ""), (review.focus = "reason"), render()) }, st === "rejected" ? "Reject again" : `Reject${key ? ` ${key}` : ""}`),
-      ),
-    );
-    if (st === "rejected" && r?.reason) head.append(h("div", { class: "dzr-why" }, h("b", {}, "Rejected: "), r.reason));
+    head.append(h("div", { class: "dzr-sub" }, `As approved${ref ? ` ${ago(ref.at)}` : ""}.`));
   }
 
   const replies = (rs: DReply[]) => (rs.length ? h("div", { class: "dzr-replies" }, rs.map((x) => h("div", { class: "dzr-reply" }, h("div", {}, x.text), h("div", { class: "dzr-meta" }, `${x.by === "claude" ? "Claude" : "You"}, ${ago(x.at)}`)))) : null);
@@ -1870,20 +1847,20 @@ function reviewPanel(spec: string, key: string, mode: "one" | "board"): HTMLElem
   const list = h(
     "div",
     { class: "dzr-list" },
-    items.length ? items.map((x) => x.el) : h("div", { class: "dzr-empty" }, readOnly ? "No notes on this version." : mode === "one" ? "No notes yet. Click a spot on the artboard to pin one." : "No notes yet. Shift+click a spot on an artboard to pin one."),
+    items.length ? items.map((x) => x.el) : h("div", { class: "dzr-empty" }, readOnly ? "No notes on this version." : "No notes yet. Shift+click a spot on an artboard to pin one."),
   );
   // Keep the list where it was scrolled; the frame callback runs once it is mounted, before paint.
   const listTop = document.querySelector(".dzr-list")?.scrollTop ?? 0;
   if (listTop) requestAnimationFrame(() => (list.scrollTop = listTop));
 
-  if (readOnly) return h("div", { class: "dzr" }, head, list, h("div", { class: "dzr-foot" }, h("div", { class: "hint" }, "Read only. Pins and reviews are added on the current design.")));
+  if (readOnly) return h("div", { class: "dzr" }, head, list, h("div", { class: "dzr-foot" }, h("div", { class: "hint" }, "Read only. Pins and comments are added on the current design.")));
   const box = draftBox("comment", `Comment on ${where}`, () => review.comment, (v) => (review.comment = v), () => sendComment(spec, key));
   const foot = h(
     "div",
     { class: "dzr-foot" },
     h("div", { class: "reason comment" }, box),
     review.err ? h("div", { class: "err" }, review.err) : null,
-    h("div", { class: "hint" }, mode === "one" ? "Click a spot on the artboard to pin a note to it" : variants.length ? "Click a variant to review it; Shift+click a spot to pin a note" : "Shift+click a spot on an artboard to pin a note"),
+    h("div", { class: "hint" }, "Shift+click to pin a note"),
   );
   return h("div", { class: "dzr" }, head, list, foot);
 }
@@ -1944,10 +1921,50 @@ function vFeedback(spec: string): DesignFeedback {
   return { ...snap.feedback, pinKey };
 }
 
+// S-45: the design viewer is a window of its own, one per spec. The board opens it: in the desktop
+// app (loaded with ?app) the board server asks the app for a native window; in a browser it is a
+// tab named after the spec, so opening it again reuses that tab.
+const params = new URLSearchParams(location.search);
+const IN_APP = params.has("app");
+const DESIGN_WIN = /^S-\d+$/.test(params.get("designs") ?? "") ? params.get("designs")! : null;
+function designUrl(spec: string, mode: "one" | "board", id?: string, snap?: string): string {
+  const q = new URLSearchParams({ designs: spec, view: mode });
+  if (id) q.set("id", id);
+  if (snap) q.set("snap", snap);
+  return `/?${q}`;
+}
+async function openDesigns(spec: string, mode: "one" | "board", id?: string, snap?: string) {
+  if (IN_APP) {
+    const r = await fetch("/api/designs-window", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ spec, view: mode, id, snap }) }).catch(() => null);
+    if (r?.ok) return;
+  }
+  window.open(designUrl(spec, mode, id, snap), `spill-designs-${spec}`);
+}
+// The app calls this when it brings an open design window forward for another view.
+(window as any).spillDesigns = (mode: "one" | "board", id?: string, snap?: string) => DESIGN_WIN && openViewer(DESIGN_WIN, mode, id || undefined, false, snap || undefined);
+
+// S-45 req 8: an unsent pin note or comment is kept per spec when the window closes.
+const draftKey = (spec: string) => `spill-design-draft-${spec}`;
+function saveDraft() {
+  if (!viewer) return;
+  try {
+    localStorage.setItem(draftKey(viewer.spec), JSON.stringify({ comment: review.comment, pin: review.pin?.text.trim() ? review.pin : null }));
+  } catch {}
+}
+function loadDraft(spec: string): { comment: string; pin: typeof review.pin } {
+  try {
+    const d = JSON.parse(localStorage.getItem(draftKey(spec)) ?? "{}");
+    return { comment: typeof d.comment === "string" ? d.comment : "", pin: d.pin && typeof d.pin.text === "string" ? d.pin : null };
+  } catch {
+    return { comment: "", pin: null };
+  }
+}
+
 function openViewer(spec: string, mode: "one" | "board", id?: string, keepReview = false, snap?: string) {
   // S-46: from the whole board, focusing an artboard keeps the variant under review.
   const sel = keepReview || viewer?.spec === spec ? review.sel : "";
-  if (!keepReview) review = { ...review, sel, pin: null, rejecting: null, focus: "", active: 0, err: "" };
+  if (!keepReview) review = { ...review, sel, pin: null, focus: "", active: 0, err: "" };
+  if (!keepReview && viewer?.spec !== spec) Object.assign(review, loadDraft(spec));
   // S-47: moving between one artboard and the whole board stays on the same snapshot.
   const s = keepReview && viewer?.spec === spec ? viewer.snap : snap;
   viewer = { spec, mode, id: undefined, zoom: null, x: 0, y: 0, snap: s };
@@ -1963,8 +1980,14 @@ window.addEventListener("keyup", (e) => e.key === "Shift" && shiftPin(false));
 window.addEventListener("blur", () => shiftPin(false));
 
 function closeViewer() {
+  // S-45: in a design window, closing the viewer closes the window.
+  if (DESIGN_WIN) {
+    if (IN_APP) fetch("/api/designs-window/close", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ spec: DESIGN_WIN }) });
+    else window.close();
+    return;
+  }
   viewer = null;
-  review = { sel: "", comment: "", pin: null, rejecting: null, reason: "", focus: "", active: 0, err: "" };
+  review = { sel: "", comment: "", pin: null, focus: "", active: 0, err: "" };
   render();
 }
 function stepViewer(d: number) {
@@ -2043,7 +2066,7 @@ function viewerPanel(): HTMLElement | null {
   if (variants.length && !variants.includes(review.sel)) review.sel = variants[0];
   const key = one ? keyOfBoard(v.spec, one) : variants.length ? review.sel : "";
   const fb = vFeedback(v.spec);
-  const stOf = (k: string) => fb.reviews[k]?.status ?? "waiting";
+  const stOf = (k: string) => boards.find((a) => a.variant === k)?.status ?? "waiting";
 
   const abView = (a: Artboard, interactive: boolean) => h("div", { class: "dzv-ab", "data-ab": a.id }, designView(v.spec, a, 1), pinsOn(v.spec, a, interactive));
   const world =
@@ -2071,7 +2094,7 @@ function viewerPanel(): HTMLElement | null {
   world.style.transform = `translate(${v.x}px, ${v.y}px) scale(${z0})`;
   world.style.setProperty("--iz", String(1 / z0));
 
-  const stage = h("div", { class: `dzv-stage${!readOnly ? " can-pin" : ""}${one && !readOnly ? " pinning" : ""}` }, world, h("div", { class: "dzv-hint" }, readOnly ? "Read only. Drag to pan, pinch or Cmd scroll to zoom, Esc to close" : one ? "Click to pin a note, drag to pan, pinch or Cmd scroll to zoom, arrows to step, Esc to close" : `${variants.length ? "Click a variant to review it, " : ""}Shift+click to pin a note, double-click an artboard to focus it, Esc to close`), one ? h("div", { class: "dzv-pos" }, `${boards.indexOf(one) + 1} / ${boards.length}`) : null);
+  const stage = h("div", { class: `dzv-stage${!readOnly ? " can-pin" : ""}` }, world, h("div", { class: "dzv-hint" }, readOnly ? "Read only. Drag to pan, pinch or Cmd scroll to zoom, Esc to close" : one ? "Shift+click to pin a note, drag to pan, pinch or Cmd scroll to zoom, arrows to step, Esc to close" : `Shift+click to pin a note, ${variants.length ? "click a variant to see its notes, " : ""}double-click an artboard to focus it, Esc to close`), one ? h("div", { class: "dzv-pos" }, `${boards.indexOf(one) + 1} / ${boards.length}`) : null);
   // Drag pans; a click without a drag drops a pin (one artboard) or picks a variant (whole board).
   // Pinch, Cmd or Ctrl scroll zooms at the pointer; plain scroll pans.
   let drag: { x: number; y: number; vx: number; vy: number; moved: boolean; target: HTMLElement } | null = null;
@@ -2095,14 +2118,14 @@ function viewerPanel(): HTMLElement | null {
     stage.classList.remove("dragging");
     if (!d || d.moved) return;
     const ab = d.target.closest<HTMLElement>(".dzv-ab");
-    if (ab && !readOnly && (one || e.shiftKey)) {
-      // A click pins on one artboard; on the whole board Shift+click pins (a plain click picks a
-      // variant) and also picks that artboard's variant, so the panel shows the pin's thread.
+    if (ab && !readOnly && e.shiftKey) {
+      // S-46 req 1: Shift+click pins, in both views; on the whole board it also picks that artboard's
+      // variant, so the panel shows the pin's thread. A plain click never pins.
       const r = ab.getBoundingClientRect();
       const x = Math.round((e.clientX - r.left) / viewerZ);
       const y = Math.round((e.clientY - r.top) / viewerZ);
       const vr = ab.closest<HTMLElement>(".dzv-group")?.dataset.variant;
-      if (!one && vr && vr !== review.sel) ((review.sel = vr), (review.rejecting = null));
+      if (!one && vr && vr !== review.sel) review.sel = vr;
       // A half-typed pin moves to the new spot instead of being lost.
       review.pin = { ab: one ? one.id : ab.dataset.ab!, x, y, text: review.pin?.text ?? "" };
       review.focus = "pin";
@@ -2113,7 +2136,6 @@ function viewerPanel(): HTMLElement | null {
       const vr = g?.dataset.variant;
       if (vr && vr !== review.sel) {
         review.sel = vr;
-        review.rejecting = null;
         render();
       }
     } else if (review.pin && !review.pin.text.trim()) {
@@ -2136,7 +2158,7 @@ function viewerPanel(): HTMLElement | null {
   return h(
     "div",
     // The fade-in plays when the viewer opens, not on every update while it stays open.
-    { class: `dzv-scrim${document.querySelector(".dzv-scrim") ? " stay" : ""}`, onclick: (e: Event) => e.target === e.currentTarget && closeViewer() },
+    { class: `dzv-scrim${document.querySelector(".dzv-scrim") ? " stay" : ""}`, onclick: (e: Event) => !DESIGN_WIN && e.target === e.currentTarget && closeViewer() },
     h(
       "div",
       { class: "dzv" },
@@ -2174,9 +2196,8 @@ window.addEventListener(
   (e) => {
     if (!viewer) return;
     if ((e.target as HTMLElement).closest("input, textarea")) return;
-    if (e.key === "Escape" && (review.pin || review.rejecting !== null)) {
+    if (e.key === "Escape" && review.pin) {
       review.pin = null;
-      review.rejecting = null;
       review.focus = "";
       render();
     } else if (e.key === "Escape") closeViewer();
@@ -2210,11 +2231,22 @@ function compareIndex(c: Card): number {
   if (sel !== undefined && sel < vs.length) return sel;
   return changedSinceApproved(c) ? vs.findIndex((x) => x.approved) : -1;
 }
-function versionLabel(vs: (Version & { approved: boolean })[], i: number): string {
+function versionLabel(vs: (Version & { approved: boolean; v?: number; edit?: number })[], i: number): string {
   const v = vs[i];
   const who = v.actor === "user" ? "you" : v.actor === "auto" ? "Spill" : "Claude";
   const what = i === vs.length - 1 ? "Current" : v.approved ? "Approved version" : i === 0 ? "First draft" : "Edited";
-  return `v${i + 1} ${what}, ${who}, ${ago(v.at)}`;
+  // S-49: numbered by approval round; several edits within one version show as edits of it.
+  const n = v.v ?? i + 1;
+  const edits = vs.filter((x) => x.v === n).length;
+  return `v${n}${edits > 1 && v.edit ? `, edit ${v.edit}` : ""} ${what}, ${who}, ${ago(v.at)}`;
+}
+
+// S-49: the spec's version ("v2"), or a newer version waiting for approval ("v3 new").
+function verTag(c: Card): HTMLElement | null {
+  if (c.kind !== "spec") return null;
+  const x = data.specVersions?.[c.id] ?? { v: 1, isNew: false };
+  const title = x.isNew ? `v${x.v}, waiting for approval${x.prevApprovedAt ? `. v${x.v - 1} approved ${ago(x.prevApprovedAt)}` : ""}` : `Version ${x.v}`;
+  return h("span", { class: `ver${x.isNew ? " new" : ""}`, title }, `v${x.v}`, x.isNew ? h("b", {}, "new") : null);
 }
 function compareBar(c: Card): HTMLElement | null {
   const vs = versionsOf(c);
@@ -2230,7 +2262,8 @@ function compareBar(c: Card): HTMLElement | null {
   const d = ci >= 0 ? lineDiff(vs[ci].body, c.body) : [];
   const add = d.filter((l) => l.op === "add").length;
   const del = d.filter((l) => l.op === "del").length;
-  return h("div", { class: "compare" }, h("span", {}, "Compared with"), sel, h("span", { class: "sp" }), ci >= 0 ? h("span", { class: "plus" }, `+${add}`) : null, ci >= 0 ? h("span", { class: "minus" }, `-${del}`) : null);
+  const mod = d.filter((l) => l.op === "mod").length;
+  return h("div", { class: "compare" }, h("span", {}, "Compared with"), sel, h("span", { class: "sp" }), ci >= 0 ? h("span", { class: "plus" }, `+${add}`) : null, ci >= 0 ? h("span", { class: "minus" }, `-${del}`) : null, ci >= 0 && mod ? h("span", { class: "tilde", title: `${mod} changed line${mod === 1 ? "" : "s"}` }, `~${mod}`) : null);
 }
 // The diff of the picked version against the current text. Unchanged runs fold into one grey line
 // naming their sections; the heading right before a change stays, so each change has its place.
@@ -2265,7 +2298,9 @@ function diffView(c: Card): HTMLElement {
       continue;
     }
     if (run.length) flush(true);
-    out.push(h("div", { class: `dl ${l.op}` }, h("span", { class: "op" }, l.op === "add" ? "+" : "-"), h("span", {}, l.text)));
+    // S-34 req 7: a changed line shows once, with only its removed and added words marked.
+    if (l.op === "mod") out.push(h("div", { class: "dl mod" }, h("span", { class: "op" }, ""), h("span", {}, (l.segs ?? []).map((g) => (g.op === "same" ? g.text : h("span", { class: g.op === "add" ? "wa" : "wd" }, g.text))))));
+    else out.push(h("div", { class: `dl ${l.op}` }, h("span", { class: "op" }, l.op === "add" ? "+" : "-"), h("span", {}, l.text)));
   }
   flush(false);
   return h("div", { class: "diff" }, out);
@@ -2353,7 +2388,7 @@ function markdown(src: string): HTMLElement {
   return el;
 }
 
-const LINK_LABEL: Record<string, string> = { blocked_by: "Blocked by", blocks: "Blocks", depends_on: "Depends on", answers: "Answers", answered_by: "Answered by", follows: "Follows", followed_by: "Followed by", replaces: "Replaces", replaced_by: "Replaced by" };
+const LINK_LABEL: Record<string, string> = { blocked_by: "Blocked by", blocks: "Blocks", depends_on: "Depends on", answers: "Answers", answered_by: "Answered by", follows: "Follows", followed_by: "Followed by", replaces: "Replaces", replaced_by: "Replaced by", deletes: "Deletes" };
 
 // S-33: an update the user asked for on a done spec, until Claude acts on it.
 const updateOf = (c: Card) => (c.kind === "spec" && c.status === "done" ? pendingUpdate(c, data.cards, data.events) : null);
@@ -2373,10 +2408,11 @@ function sheetLinks(c: Card): HTMLElement {
       const t = byId.get(l.target);
       return h(
         "button",
-        { class: "linkrow", onclick: () => openSheet(l.target, true) },
+        // S-53: a deleted card's link stays as plain text.
+        { class: "linkrow", disabled: !t, onclick: () => t && openSheet(l.target, true) },
         h("span", { class: "k" }, LINK_LABEL[l.type] ?? l.type),
         h("span", { class: "id" }, l.target),
-        h("span", { class: "t" }, t?.title ?? ""),
+        h("span", { class: "t" }, t?.title ?? "Deleted"),
         t ? h("span", { class: "s" }, t.kind === "spec" ? (SPEC_STATUS_LABEL[t.status] ?? t.status) : t.status) : null,
       );
     }),
@@ -2555,7 +2591,7 @@ function sheet(): HTMLElement | null {
         h("button", { class: "kb", title: "Close (Esc)", onclick: closeSheet }, "Esc"),
       ),
       h("h2", {}, c.title),
-      h("div", { class: "prov" }, statusPill(c), changedSinceApproved(c) ? h("span", { class: "spill-pill st-changed" }, "Changed since approved") : null, h("span", {}, provenance(c) ?? "")),
+      h("div", { class: "prov" }, statusPill(c), verTag(c), changedSinceApproved(c) ? h("span", { class: "spill-pill st-changed" }, "Changed since approved") : null, h("span", {}, provenance(c) ?? "")),
       h(
         "div",
         { class: "tabs" },
@@ -3312,6 +3348,16 @@ function render() {
 
   byId.clear();
   for (const c of data.cards) byId.set(c.id, c);
+  // S-45: a design window shows only its spec's viewer, filling the window.
+  if (DESIGN_WIN) {
+    document.title = `${DESIGN_WIN} designs${data.project ? `, ${data.project}` : ""}`;
+    document.body.classList.add("design-win");
+    if (!viewer && designsOf(DESIGN_WIN).length) openViewer(DESIGN_WIN, params.get("view") === "one" ? "one" : "board", params.get("id") ?? undefined, false, params.get("snap") ?? undefined);
+    const panel = viewer ? viewerPanel() : null;
+    app.replaceChildren(panel ?? h("div", { class: "empty" }, data.cards.length ? `${DESIGN_WIN} has no designs.` : "Loading..."));
+    if (viewer && viewer.zoom === null) requestAnimationFrame(fitViewer);
+    return;
+  }
   trackDone();
   trackApproved();
   trackReply();

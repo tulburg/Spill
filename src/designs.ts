@@ -169,7 +169,8 @@ export interface Artboard {
   width: string;
   height: string;
   created: string;
-  status: "waiting" | "accepted" | "rejected";
+  // S-46: "chosen" once the design question picked this variant (or approved the whole design).
+  status: "waiting" | "chosen";
 }
 
 interface Index {
@@ -212,7 +213,10 @@ export interface Feedback {
   nextNote: number;
   pins: Pin[];
   notes: Note[];
+  // S-46: earlier accept and reject records; kept, no longer shown.
   reviews: Record<string, Review>;
+  // S-46: what the design question's answer chose: a variant key, or "" for the whole design.
+  chosen?: { variant: string; at: string };
 }
 
 const SPEC = /^S-\d+$/;
@@ -292,12 +296,34 @@ export class Designs {
     throw new Error(`No node ${nodeId} in ${spec}'s designs`);
   }
 
-  // S-46: an artboard's status comes from the review of its variant (or of the whole design).
+  // S-46: an artboard is "chosen" when the design question's answer picked its variant (or the whole design).
   private reviewed(spec: string): Artboard[] {
     const boards = this.index(spec).artboards;
     const fb = this.feedbackOf(spec);
     const keys = variantKeys(boards);
-    return boards.map((a) => ({ ...a, status: fb.reviews[keyOf(a, keys)]?.status ?? "waiting" }));
+    return boards.map((a) => ({ ...a, status: fb.chosen && fb.chosen.variant === keyOf(a, keys) ? "chosen" : "waiting" }));
+  }
+
+  // S-46: the options of a spec's design question: one per variant, or approve the whole design.
+  signOffOptions(spec: string): { key: string; text: string }[] {
+    this.checkSpec(spec);
+    const boards = this.index(spec).artboards;
+    if (!boards.length) throw new Error(`${spec} has no designs yet; draw them before asking for sign-off`);
+    const keys = variantKeys(boards);
+    if (!keys.length) return [{ key: "", text: "Approve this design" }];
+    return keys.map((k) => {
+      const first = boards.find((b) => b.variant === k);
+      return { key: k, text: `Variant ${k}${first ? `: ${first.title}` : ""}` };
+    });
+  }
+
+  // S-46: the design question was answered with a variant (or "Approve this design").
+  choose(spec: string, variant: string): void {
+    if (this.actor !== "user") throw new Error("Only the user signs off a design");
+    const key = this.checkKey(spec, variant);
+    const fb = this.feedbackOf(spec);
+    fb.chosen = { variant: key, at: new Date().toISOString() };
+    this.saveFeedback(spec, fb);
   }
 
   list(spec?: string): { spec: string; artboards: Artboard[] }[] {
@@ -465,7 +491,7 @@ export class Designs {
   private feedbackOf(spec: string): Feedback {
     const p = join(this.dir(spec), "feedback.json");
     const f = existsSync(p) ? JSON.parse(readFileSync(p, "utf8")) : {};
-    return { next: f.next ?? 1, nextNote: f.nextNote ?? 1, pins: f.pins ?? [], notes: f.notes ?? [], reviews: f.reviews ?? {} };
+    return { next: f.next ?? 1, nextNote: f.nextNote ?? 1, pins: f.pins ?? [], notes: f.notes ?? [], reviews: f.reviews ?? {}, ...(f.chosen ? { chosen: f.chosen } : {}) };
   }
 
   private saveFeedback(spec: string, fb: Feedback): void {
@@ -499,11 +525,10 @@ export class Designs {
     return { ...fb, keys, artboards, pinKey };
   }
 
-  // True while a spec has designs and none of them (no variant, or not the whole design) is accepted.
+  // True while a spec has designs and its design question has not chosen one.
   awaitingReview(spec: string): boolean {
     if (!SPEC.test(spec) || !existsSync(join(this.dir(spec), "index.json"))) return false;
-    const boards = this.reviewed(spec);
-    return boards.length > 0 && !boards.some((a) => a.status === "accepted");
+    return this.index(spec).artboards.length > 0 && !this.feedbackOf(spec).chosen;
   }
 
   pin(a: { spec: string; artboard: string; x: number; y: number; text: string }): Pin {
@@ -535,21 +560,6 @@ export class Designs {
     this.saveFeedback(a.spec, fb);
     this.log(a.spec, `${key ? `variant ${key}, ` : ""}comment ${n.id}: ${text}`, "design_comment");
     return n;
-  }
-
-  // Accept or reject a variant, or the whole design. "waiting" takes a review back.
-  review(a: { spec: string; variant?: string; status: "accepted" | "rejected" | "waiting"; reason?: string }): void {
-    if (this.actor !== "user") throw new Error("Only the user accepts or rejects a design");
-    this.checkSpec(a.spec);
-    const key = this.checkKey(a.spec, a.variant);
-    const reason = (a.reason ?? "").trim();
-    if (!["accepted", "rejected", "waiting"].includes(a.status)) throw new Error("status is accepted, rejected or waiting");
-    if (a.status === "rejected" && !reason) throw new Error("A reason is required to reject");
-    const fb = this.feedbackOf(a.spec);
-    if (a.status === "waiting") delete fb.reviews[key];
-    else fb.reviews[key] = { status: a.status, ...(a.status === "rejected" ? { reason } : {}), at: new Date().toISOString() };
-    this.saveFeedback(a.spec, fb);
-    this.log(a.spec, `${key ? `variant ${key}` : "design"} ${a.status === "waiting" ? "back to waiting" : a.status}${a.status === "rejected" ? `: ${reason}` : ""}`, "design_review");
   }
 
   // A reply on a pin (by number) or a comment (c-n); resolve marks either one resolved, which
@@ -604,7 +614,7 @@ export class Designs {
         const html = existsSync(f) ? readFileSync(f, "utf8") : "";
         return { ...a, html, h: htmlHash(html) };
       }),
-      feedback: { pins: fb.pins, notes: fb.notes, reviews: fb.reviews },
+      feedback: { pins: fb.pins, notes: fb.notes, reviews: fb.reviews, chosen: fb.chosen },
     };
     const body = JSON.stringify(snap);
     const hash = Bun.hash(body).toString(36);
@@ -642,7 +652,7 @@ export class Designs {
 // S-47: a spec's designs as they were when it was approved, stored once per distinct state.
 export interface Snapshot {
   artboards: (Artboard & { html: string; h: string })[];
-  feedback: { pins: Pin[]; notes: Note[]; reviews: Record<string, Review> };
+  feedback: { pins: Pin[]; notes: Note[]; reviews: Record<string, Review>; chosen?: { variant: string; at: string } };
 }
 export interface SnapshotRef {
   at: string;

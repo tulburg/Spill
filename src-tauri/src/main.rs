@@ -21,12 +21,21 @@ struct Project {
     label: String,
     root: PathBuf,
     name: String,
+    port: u16,
     server: Child,
+}
+
+// S-45: a spec's design viewer in a window of its own, tied to its project's window.
+struct DesignWin {
+    label: String,
+    project: String,
+    spec: String,
 }
 
 #[derive(Default)]
 struct Windows {
     open: Vec<Project>,
+    designs: Vec<DesignWin>,
     focused: Option<String>,
     next: u32,
 }
@@ -101,6 +110,19 @@ fn alert(title: &str, message: &str) {
 }
 
 // A free port, or `want` when it is free.
+// The bun that runs board servers. `spill app` passes its own (SPILL_BUN); an app opened from the
+// Dock or Finder gets a minimal PATH without bun, so look where bun is usually installed.
+fn bun_path() -> String {
+    if let Ok(b) = std::env::var("SPILL_BUN") {
+        return b;
+    }
+    let home = std::env::var("HOME").unwrap_or_default();
+    [format!("{home}/.bun/bin/bun"), "/opt/homebrew/bin/bun".into(), "/usr/local/bin/bun".into()]
+        .into_iter()
+        .find(|p| std::path::Path::new(p).exists())
+        .unwrap_or_else(|| "bun".into())
+}
+
 fn pick_port(want: Option<u16>) -> u16 {
     if let Some(p) = want {
         if TcpListener::bind(("127.0.0.1", p)).is_ok() {
@@ -134,7 +156,7 @@ fn open_project(app: &AppHandle, dir: &Path, port: Option<u16>) {
         return;
     }
 
-    let bun = std::env::var("SPILL_BUN").unwrap_or_else(|_| "bun".into());
+    let bun = bun_path();
     let cli = std::env::var("SPILL_CLI").unwrap_or_else(|_| concat!(env!("CARGO_MANIFEST_DIR"), "/../src/cli.ts").into());
     let port = pick_port(port);
     let server = match Command::new(bun).arg(cli).arg("serve").arg(port.to_string()).current_dir(&root).stdout(Stdio::null()).spawn() {
@@ -148,7 +170,7 @@ fn open_project(app: &AppHandle, dir: &Path, port: Option<u16>) {
         let mut w = state.0.lock().unwrap();
         w.next += 1;
         let label = format!("p{}", w.next);
-        w.open.push(Project { label: label.clone(), root: root.clone(), name: name.clone(), server });
+        w.open.push(Project { label: label.clone(), root: root.clone(), name: name.clone(), port, server });
         label
     };
     touch_recent(&root, &name);
@@ -168,7 +190,8 @@ fn open_project(app: &AppHandle, dir: &Path, port: Option<u16>) {
             }
             thread::sleep(Duration::from_millis(100));
         }
-        let url = format!("http://localhost:{port}").parse().expect("board url");
+        // ?app tells the page it runs in the app, so design windows open natively (S-45).
+        let url = format!("http://localhost:{port}/?app=1").parse().expect("board url");
         let window = WebviewWindowBuilder::new(&app, &label, WebviewUrl::External(url))
             .title(format!("Spill: {name}"))
             .inner_size(1440.0, 960.0)
@@ -188,17 +211,62 @@ fn open_project(app: &AppHandle, dir: &Path, port: Option<u16>) {
     });
 }
 
-// Stop a window's board server and forget the window.
+// Stop a window's board server and forget the window. Its design windows close with it (S-45).
 fn close_project(app: &AppHandle, label: &str) {
     let state = app.state::<AppState>();
     let mut w = state.0.lock().unwrap();
+    let mut designs = Vec::new();
     if let Some(i) = w.open.iter().position(|p| p.label == label) {
         let mut p = w.open.remove(i);
         let _ = p.server.kill();
         let _ = p.server.wait();
+        designs = w.designs.iter().filter(|d| d.project == label).map(|d| d.label.clone()).collect();
     }
+    w.designs.retain(|d| d.label != label && d.project != label);
     if w.focused.as_deref() == Some(label) {
         w.focused = None;
+    }
+    drop(w);
+    for d in designs {
+        if let Some(win) = app.get_webview_window(&d) {
+            let _ = win.close();
+        }
+    }
+}
+
+// S-45: open a spec's design window for the project at `root`, or bring it forward on the view asked for.
+fn open_designs(app: &AppHandle, root: &Path, spec: &str, view: &str, id: &str, snap: &str) {
+    let root = fs::canonicalize(root).unwrap_or_else(|_| root.to_path_buf());
+    let state = app.state::<AppState>();
+    let Some((project, name, port)) = state.0.lock().unwrap().open.iter().find(|p| p.root == root).map(|p| (p.label.clone(), p.name.clone(), p.port)) else {
+        return;
+    };
+    let label = format!("{project}-{spec}");
+    if let Some(win) = app.get_webview_window(&label) {
+        let js = format!("window.spillDesigns && window.spillDesigns({view:?}, {id:?}, {snap:?})");
+        let _ = win.eval(&js);
+        focus_window(app, &label);
+        return;
+    }
+    let mut url = format!("http://localhost:{port}/?app=1&designs={spec}&view={view}");
+    if !id.is_empty() {
+        url += &format!("&id={id}");
+    }
+    if !snap.is_empty() {
+        url += &format!("&snap={snap}");
+    }
+    let Ok(url) = url.parse() else { return };
+    let built = WebviewWindowBuilder::new(app, &label, WebviewUrl::External(url))
+        .title(format!("{spec} designs, {name}"))
+        .inner_size(1280.0, 860.0)
+        .min_inner_size(640.0, 420.0)
+        .build();
+    match built {
+        Ok(_) => {
+            state.0.lock().unwrap().designs.push(DesignWin { label, project, spec: spec.to_string() });
+            refresh_menu(app);
+        }
+        Err(e) => alert("Could not open the designs", &e.to_string()),
     }
 }
 
@@ -278,9 +346,15 @@ fn build_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
     if !windows.is_empty() {
         window_items.push(Box::new(sep()?));
     }
+    let designs: Vec<(String, String, String)> = state.0.lock().unwrap().designs.iter().map(|d| (d.label.clone(), d.project.clone(), d.spec.clone())).collect();
     for (label, name) in &windows {
         let on = focused.as_deref() == Some(label.as_str());
         window_items.push(Box::new(CheckMenuItem::with_id(app, format!("win:{label}"), name, true, on, None::<&str>)?));
+        // S-45: a project's design windows sit under it.
+        for (dl, _, spec) in designs.iter().filter(|(_, p, _)| p == label) {
+            let on = focused.as_deref() == Some(dl.as_str());
+            window_items.push(Box::new(CheckMenuItem::with_id(app, format!("win:{dl}"), format!("    {spec} designs"), true, on, None::<&str>)?));
+        }
     }
     let window_refs: Vec<&dyn IsMenuItem<tauri::Wry>> = window_items.iter().map(|b| b.as_ref()).collect();
     let window_menu = Submenu::with_items(app, "Window", true, &window_refs)?;
@@ -359,15 +433,37 @@ fn listen(app: AppHandle) {
             if BufReader::new(&stream).read_line(&mut line).is_err() {
                 continue;
             }
-            let mut parts = line.trim_end().splitn(3, '\t');
-            if parts.next() != Some("open") {
-                continue;
+            let parts: Vec<String> = line.trim_end_matches(['\r', '\n']).split('\t').map(String::from).collect();
+            let arg = |i: usize| parts.get(i).cloned().unwrap_or_default();
+            match parts.first().map(String::as_str) {
+                Some("open") => {
+                    let dir = PathBuf::from(if arg(1).is_empty() { ".".into() } else { arg(1) });
+                    let port = arg(2).parse::<u16>().ok();
+                    let _ = (&stream).write_all(b"ok\n");
+                    let app = app.clone();
+                    thread::spawn(move || open_project(&app, &dir, port));
+                }
+                // S-45: a board page asks for its spec's design window: designs<TAB>root<TAB>spec<TAB>view<TAB>id<TAB>snap.
+                Some("designs") => {
+                    let root = PathBuf::from(arg(1));
+                    let known = fs::canonicalize(&root).ok().is_some_and(|r| app.state::<AppState>().0.lock().unwrap().open.iter().any(|p| p.root == r));
+                    let _ = (&stream).write_all(if known { b"ok\n" } else { b"no\n" });
+                    if known {
+                        let app = app.clone();
+                        let (spec, view, id, snap) = (arg(2), arg(3), arg(4), arg(5));
+                        thread::spawn(move || open_designs(&app, &root, &spec, &view, &id, &snap));
+                    }
+                }
+                Some("close-designs") => {
+                    let root = fs::canonicalize(arg(1)).unwrap_or_default();
+                    let label = app.state::<AppState>().0.lock().unwrap().open.iter().find(|p| p.root == root).map(|p| format!("{}-{}", p.label, arg(2)));
+                    let _ = (&stream).write_all(if label.is_some() { b"ok\n" } else { b"no\n" });
+                    if let Some(win) = label.and_then(|l| app.get_webview_window(&l)) {
+                        let _ = win.close();
+                    }
+                }
+                _ => {}
             }
-            let dir = PathBuf::from(parts.next().unwrap_or("."));
-            let port = parts.next().and_then(|p| p.parse::<u16>().ok());
-            let _ = (&stream).write_all(b"ok\n");
-            let app = app.clone();
-            thread::spawn(move || open_project(&app, &dir, port));
         }
     });
 }

@@ -381,6 +381,10 @@ body {
 .head .id { font-family: "Geist Mono", monospace; color: var(--muted); white-space: nowrap; flex-shrink: 0; }
 .head .sp { flex: 1; }
 .head .status { color: var(--muted); white-space: nowrap; }
+/* S-49: the spec's version; "new" marks a newer version waiting for approval. */
+.ver { flex: none; display: inline-flex; align-items: center; gap: 4px; padding: 0 5px; border: 1px solid var(--border); border-radius: 4px; font-family: "Geist Mono", monospace; font-size: 11px; line-height: 16px; color: var(--muted); white-space: nowrap; }
+.ver.new { border-color: var(--indigo-line, var(--indigo)); color: var(--indigo-text); background: var(--indigo-bg); }
+.ver b { font-family: inherit; font-weight: 600; font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; }
 .title { font-size: 14px; line-height: 20px; font-weight: 600; }
 .depth0 > .card .title { font-size: 15px; }
 .why { font-size: 13px; line-height: 18px; color: var(--muted); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
@@ -601,7 +605,9 @@ body.sheet-open #canvas { right: 572px; }
 .overview .answer { margin-top: 12px; }
 .links { display: flex; flex-direction: column; gap: 8px; }
 .linkrow { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--card); font: inherit; font-size: 13px; text-align: left; cursor: pointer; }
-.linkrow:hover { background: var(--inset); }
+.linkrow:hover:not(:disabled) { background: var(--inset); }
+.linkrow:disabled { cursor: default; color: inherit; }
+.linkrow:disabled .t { color: var(--muted); }
 .linkrow .k { width: 84px; flex-shrink: 0; color: var(--muted); }
 .linkrow .id { font-family: "Geist Mono", monospace; color: var(--text-2); flex-shrink: 0; }
 .linkrow .t { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text); }
@@ -899,7 +905,8 @@ button.fix:disabled { border-color: var(--border); color: var(--faint); cursor: 
 .overview .compare { display: flex; align-items: center; gap: 8px; font-size: 12px; line-height: 16px; color: var(--muted); }
 .overview .compare select { font: inherit; font-size: 12px; color: var(--text); padding: 2px 6px; border: 1px solid var(--border); border-radius: 6px; background: var(--card); max-width: 260px; }
 .overview .compare .sp { flex: 1; }
-.overview .compare .plus, .overview .compare .minus { font-family: "Geist Mono", monospace; }
+.overview .compare .plus, .overview .compare .minus, .overview .compare .tilde { font-family: "Geist Mono", monospace; }
+.overview .compare .tilde { color: var(--muted); }
 .overview .compare .plus { color: var(--green-text); }
 .overview .compare .minus { color: var(--red-text); }
 .diff { display: flex; flex-direction: column; gap: 2px; font-size: 13px; line-height: 20px; }
@@ -913,6 +920,9 @@ button.fix:disabled { border-color: var(--border); color: var(--faint); cursor: 
 .diff .dl.del .op { color: var(--red-text); }
 .diff .dl.add { background: var(--green-wash); color: var(--green-ink); }
 .diff .dl.add .op { color: var(--green-text); }
+.diff .dl.mod { color: var(--text); }
+.diff .dl .wd { background: var(--red-bg); color: var(--red-ink); text-decoration: line-through; border-radius: 3px; }
+.diff .dl .wa { background: var(--green-wash); color: var(--green-ink); border-radius: 3px; }
 
 /* S-35: replaced specs, branched specs, replacement questions and the Code tab */
 .card.spec.s-replaced { background: var(--done-bg); }
@@ -1051,15 +1061,16 @@ button.fix:disabled { border-color: var(--border); color: var(--faint); cursor: 
 .dz-size { font-family: "Geist Mono", monospace; font-size: 11px; color: var(--faint); }
 .dz-letter { flex: none; width: 18px; height: 18px; border-radius: 5px; background: var(--text); color: var(--card); font-size: 10px; font-weight: 600; line-height: 18px; text-align: center; }
 .dz-st { flex: none; display: inline-flex; align-items: center; gap: 4px; font-size: 11px; color: var(--muted); }
-.dz-st i { width: 6px; height: 6px; border-radius: 3px; background: var(--amber); }
-.dz-st.accepted i { background: var(--green); }
-.dz-st.rejected i { background: var(--red); }
+.dz-st.chosen { color: var(--green-text); }
 .dz-chip { display: inline-flex; align-items: center; gap: 5px; padding: 0 8px; border: 0; border-radius: 999px; background: var(--canvas); font: inherit; font-size: 12px; font-weight: 500; line-height: 20px; color: var(--text-2); cursor: pointer; }
 .dz-chip:hover { color: var(--text); }
 
 .dzv-scrim { position: fixed; inset: 0; z-index: 50; background: rgba(var(--shadow-rgb), 0.18); display: flex; padding: 24px; animation: dzvin 0.14s ease-out; }
 @keyframes dzvin { from { opacity: 0; } }
 .dzv-scrim.stay { animation: none; }
+/* S-45: in a design window the viewer is the whole window. */
+.design-win .dzv-scrim { padding: 0; background: var(--card); animation: none; }
+.design-win .dzv { border: 0; border-radius: 0; box-shadow: none; }
 .dzv { flex: 1; display: flex; flex-direction: column; background: var(--card); border: 1px solid var(--border); border-radius: 16px; box-shadow: 0 16px 48px rgba(var(--shadow-rgb), 0.18); overflow: hidden; }
 .dzv-bar { height: 48px; flex: none; display: flex; align-items: center; gap: 10px; padding: 0 12px 0 16px; border-bottom: 1px solid var(--border); }
 .dzv-id { font-family: "Geist Mono", monospace; font-size: 12px; color: var(--text-2); }
@@ -1090,7 +1101,7 @@ button.fix:disabled { border-color: var(--border); color: var(--faint); cursor: 
 .dzv-body { flex: 1; min-height: 0; display: flex; position: relative; }
 .dzv-body .dzv-stage { flex: 1; }
 /* Comment cursor: a pin with a plus, its tail (bottom left) is the spot the pin lands on. */
-.dzv-stage.pinning .dzv-ab, .shift-pin .dzv-stage.can-pin:not(.dragging) .dzv-ab { cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='26' height='26' viewBox='0 0 26 26'%3E%3Cpath d='M2 24V12A10 10 0 1 1 12 22H4Z' fill='%2318181b' stroke='%23fff' stroke-width='2' stroke-linejoin='round'/%3E%3Cpath d='M12 8v8M8 12h8' stroke='%23fff' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E") 2 24, crosshair; }
+.shift-pin .dzv-stage.can-pin:not(.dragging) .dzv-ab { cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='26' height='26' viewBox='0 0 26 26'%3E%3Cpath d='M2 24V12A10 10 0 1 1 12 22H4Z' fill='%2318181b' stroke='%23fff' stroke-width='2' stroke-linejoin='round'/%3E%3Cpath d='M12 8v8M8 12h8' stroke='%23fff' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E") 2 24, crosshair; }
 .dzv-back { display: inline-flex; align-items: center; gap: 6px; margin-left: 4px; padding: 4px 10px; border: 1px solid var(--border); border-radius: 8px; background: none; font: inherit; font-size: 12px; color: var(--text-2); cursor: pointer; }
 .dzv-back:hover { background: var(--canvas); color: var(--text); }
 .dzv-ab { position: relative; }
@@ -1099,7 +1110,6 @@ button.fix:disabled { border-color: var(--border); color: var(--faint); cursor: 
 .dzv-group.sel .dzv-set { outline: 6px solid var(--indigo); outline-offset: 16px; border-radius: 4px; }
 .dzv-glabel .dzr-pill { font-size: 22px; padding: 4px 12px; border-radius: 8px; }
 .dzv-glabel .dzr-pill svg { width: 20px; height: 20px; }
-.dzv-glabel .dzr-pill i { width: 12px; height: 12px; border-radius: 6px; }
 .dzv-group { cursor: pointer; }
 
 /* Pins keep their size at any zoom: --iz is 1 / zoom. */
@@ -1122,18 +1132,11 @@ button.fix:disabled { border-color: var(--border); color: var(--faint); cursor: 
 .dzr-title .sp { flex: 1; }
 .dzr-label { font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-2); }
 .dzr-pill { display: inline-flex; align-items: center; gap: 4px; padding: 1px 6px; border-radius: 4px; font-size: 11px; font-weight: 500; line-height: 16px; white-space: nowrap; }
-.dzr-pill i { width: 6px; height: 6px; border-radius: 3px; background: var(--amber); }
-.dzr-pill.waiting { color: var(--amber-text); background: var(--amber-bg); }
-.dzr-pill.accepted { color: var(--green-text); background: var(--green-bg); }
-.dzr-pill.rejected { color: var(--red-text); background: var(--red-bg); }
-.dzr-actions { display: flex; gap: 8px; }
-.dzr-actions .btn { flex: 1; height: 32px; }
+.dzr-pill.chosen { color: var(--green-text); background: var(--green-bg); }
 .dzr-sub { font-size: 12px; line-height: 16px; color: var(--muted); }
-.dzr-reason textarea { flex: 1; min-height: 72px; max-height: 200px; resize: none; border-radius: 8px; border: 1px solid var(--red-line); padding: 6px 10px; font: inherit; font-size: 13px; line-height: 18px; color: var(--text); background: var(--card); outline: none; box-shadow: 0 0 0 3px rgba(var(--red-rgb), 0.12); box-sizing: border-box; }
 .dzr-row { display: flex; align-items: center; gap: 8px; }
 .dzr-row .sp { flex: 1; }
 .dzr-row .hint { flex: none; }
-.dzr-why { font-size: 12px; line-height: 16px; color: var(--red-text); white-space: pre-wrap; }
 .dzr-list { flex: 0 1 auto; min-height: 0; overflow-y: auto; padding: 8px 8px; display: flex; flex-direction: column; }
 .dzr-empty { padding: 16px 8px; font-size: 12px; color: var(--muted); }
 .dzr-item { display: flex; gap: 10px; padding: 8px; border-radius: 8px; cursor: pointer; }

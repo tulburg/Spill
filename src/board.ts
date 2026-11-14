@@ -25,7 +25,9 @@ export function reqProgress(c: Card): { done: number; total: number } {
   return { done: done.size, total };
 }
 
-export const DESIGN_OPTIONS = "- A. Approve this design\n- B. Needs changes";
+export const DELETE_OPTIONS = "- A. Delete it\n- B. Keep it";
+// S-53: cards with no code behind them, which a delete may be proposed for.
+const DELETABLE: Record<string, string[]> = { spec: ["draft", "discussing", "approved", "rejected"], question: ["open", "dropped"] };
 
 function today(): string {
   return new Date().toISOString().slice(0, 10);
@@ -90,11 +92,14 @@ export class Board {
 
   ask(args: { title: string; body?: string; section?: string; blocks?: string[]; multi?: boolean; design?: boolean }): Card {
     let body = args.body ?? "";
-    // S-29: a design approval question blocks its spec and always offers approve or change.
+    // S-29 / S-46: the one design sign-off for a spec. It blocks that spec, and its options come from
+    // the spec's designs: one per variant, or "Approve this design", then "Needs changes".
     if (args.design) {
-      if (!args.blocks?.length) throw new Error("A design question must block the spec it approves");
+      if (args.blocks?.length !== 1) throw new Error("A design question must block exactly the one spec it signs off");
       if (args.multi) throw new Error("A design question takes one answer");
-      if (!/^\s*-\s*[A-Z]\.\s+/m.test(body)) body = `${body.trim()}\n\n${DESIGN_OPTIONS}`;
+      const opts = new Designs(this.store).signOffOptions(args.blocks[0]);
+      const lines = [...opts.map((o) => o.text), "Needs changes"].map((t, i) => `- ${String.fromCharCode(65 + i)}. ${t}`);
+      body = `${body.replace(/^\s*-\s*[A-Z]\.\s+.*$/gm, "").trim()}\n\n${lines.join("\n")}`.trim();
     }
     const q = this.create("question", args.title, body, "open", args.section);
     if (args.multi) q.select = "multi";
@@ -188,8 +193,8 @@ export class Board {
     if (args.status === "approved" && card.kind === "spec") {
       const open = this.openQuestions(card);
       if (open.length) throw new Error(`${card.id} has open questions: ${open.join(", ")}. Answer them first.`);
-      // S-46: designs waiting for review hold approval until the design (or a variant) is accepted.
-      if (new Designs(this.store).awaitingReview(card.id)) throw new Error(`${card.id} has designs waiting for review. Accept the design or a variant first.`);
+      // S-46: a spec with designs is approved through its design question.
+      if (new Designs(this.store).awaitingReview(card.id)) throw new Error(`${card.id} has designs waiting for sign-off. Answer its design question first.`);
     }
     const from = card.status;
     card.status = args.status;
@@ -271,13 +276,68 @@ export class Board {
   }
 
   // S-34: a spec's versions, oldest first; the one it had when last approved is marked.
-  versions(card: Card): (Version & { approved: boolean })[] {
+  versions(card: Card): (Version & { approved: boolean; v: number; edit: number })[] {
     const vs = this.store.versions(card.id);
     const events = this.store.events();
     const approval = events.findLastIndex((e) => e.card === card.id && e.action === "status" && /-> approved/.test(e.detail ?? ""));
     const approvedAt = approval >= 0 ? events[approval].at : undefined;
     const ai = approvedAt ? vs.findLastIndex((v) => (v.seq !== undefined ? v.seq <= approval : v.at <= approvedAt)) : -1;
-    return vs.map((v, i) => ({ ...v, approved: i === ai }));
+    const rounds = this.rounds(card.id, vs);
+    return vs.map((v, i) => ({ ...v, approved: i === ai, ...rounds[i] }));
+  }
+
+  // S-49: a spec's version counts approval rounds, not text edits. Each saved text gets a version
+  // number and its edit number within that version: a text written after an approval of the one
+  // before it starts the next version.
+  private rounds(id: string, vs: Version[]): { v: number; edit: number }[] {
+    const approvals = this.approvalSeqs(id);
+    const events = this.store.events();
+    const seqOf = (x: Version) => x.seq ?? 0;
+    // An edit made while the spec is being built (a decision recorded mid-build) stays in the
+    // version being built; only an edit outside a build starts the next version.
+    const building = (seq: number) => {
+      const e = events.slice(0, seq).findLast((x) => x.card === id && x.action === "status");
+      return /-> active\b/.test(e?.detail ?? "");
+    };
+    const out: { v: number; edit: number }[] = [];
+    let start = 0; // seq where the current version's text began
+    vs.forEach((x, i) => {
+      if (!i) return (start = seqOf(x)), out.push({ v: 1, edit: 1 });
+      const prev = out[i - 1];
+      // The current version was approved since it began, and this edit is not part of its build.
+      const next = !building(seqOf(x)) && approvals.some((a) => a >= start && a < seqOf(x));
+      if (next) start = seqOf(x);
+      out.push(next ? { v: prev.v + 1, edit: 1 } : { v: prev.v, edit: prev.edit + 1 });
+    });
+    return out;
+  }
+
+  private approvalSeqs(id: string): number[] {
+    return this.store
+      .events()
+      .map((e, i) => (e.card === id && e.action === "status" && /-> approved/.test(e.detail ?? "") ? i : -1))
+      .filter((i) => i >= 0);
+  }
+
+  // S-49: the spec's current version, and whether it is a newer version waiting for approval
+  // (its text changed since the last approval, which is not yet approved again).
+  version(card: Card): { v: number; isNew: boolean; prevApprovedAt?: string } {
+    const vs = this.store.versions(card.id);
+    const approvals = this.approvalSeqs(card.id);
+    if (!vs.length) return { v: 1, isNew: false };
+    const rounds = this.rounds(card.id, vs);
+    const last = rounds[rounds.length - 1];
+    const start = vs[rounds.findIndex((r) => r.v === last.v)];
+    const approved = approvals.some((a) => a >= (start.seq ?? 0));
+    const before = approvals.filter((a) => a < (start.seq ?? 0)).pop();
+    // "new" only while that version waits for approval.
+    const waiting = ["draft", "discussing"].includes(card.status);
+    return { v: last.v, isNew: last.v > 1 && !approved && waiting, prevApprovedAt: before !== undefined ? this.store.events()[before].at : undefined };
+  }
+
+  versionLabel(card: Card): string {
+    const x = this.version(card);
+    return `v${x.v}${x.isNew ? " new" : ""}`;
   }
 
   // S-34: what changed since the approved version, when the text differs from it.
@@ -329,6 +389,61 @@ export class Board {
     this.addLink(q, "replaces", old.id);
     this.store.save(q);
     return q;
+  }
+
+  // S-53: propose deleting a card that should not exist. Nothing is deleted until the user picks A.
+  proposeDelete(args: { id: string; reason: string }): Card {
+    const card = this.store.get(args.id);
+    const reason = args.reason?.trim();
+    if (!reason) throw new Error("Say why the card should be deleted");
+    this.checkDeletable(card);
+    const pending = this.store.all().find((q) => q.kind === "question" && q.status === "open" && q.links.some((l) => l.type === "deletes" && l.target === card.id));
+    if (pending) throw new Error(`${pending.id} already asks to delete ${card.id}`);
+    const body = `${reason}\n\nDeleting ${card.id} "${card.title}" removes its card and every link to it, and its open questions that block nothing else. This cannot be undone.\n\n${DELETE_OPTIONS}`;
+    const q = this.ask({ title: `Delete ${card.id}?`, body, section: card.section ?? undefined });
+    this.addLink(q, "deletes", card.id);
+    this.store.save(q);
+    return q;
+  }
+
+  private checkDeletable(card: Card): void {
+    if (card.kind === "spec" && card.status === "done") throw new Error(`${card.id} is done; propose replacing it with spill_propose_replace instead`);
+    if (!DELETABLE[card.kind]?.includes(card.status))
+      throw new Error(`${card.id} is ${card.status}; only ${Object.entries(DELETABLE).map(([k, v]) => `${k}s that are ${v.join(", ")}`).join(", or ")} can be deleted`);
+  }
+
+  // S-53: the user picked A on a delete question. Removes the card, the links to it, and its open
+  // questions that block nothing else. The question stays, answered, as the record.
+  private deleteCard(q: Card, id: string): void {
+    if (!this.store.has(id)) return;
+    const card = this.store.get(id);
+    try {
+      this.checkDeletable(card);
+    } catch (e) {
+      this.addComment(q, `Not deleted: ${(e as Error).message}`);
+      this.store.save(q);
+      return;
+    }
+    const gone = new Set([id]);
+    for (const l of card.links.filter((l) => l.type === "blocked_by")) {
+      const b = this.store.has(l.target) ? this.store.get(l.target) : undefined;
+      if (b?.kind === "question" && b.status === "open" && b.links.filter((x) => x.type === "blocks").every((x) => x.target === id)) gone.add(b.id);
+    }
+    for (const c of this.store.all()) {
+      if (gone.has(c.id)) continue;
+      const keep = c.links.filter((l) => !gone.has(l.target) || (c.id === q.id && l.type === "deletes"));
+      if (keep.length !== c.links.length) {
+        c.links = keep;
+        this.store.save(c);
+      }
+    }
+    for (const g of gone) this.store.remove(g);
+    const f = this.store.focus();
+    if (f && [...f.discussing, ...f.next].some((x) => gone.has(x)))
+      this.store.saveFocus({ ...f, discussing: f.discussing.filter((x) => !gone.has(x)), next: f.next.filter((x) => !gone.has(x)) });
+    const reason = q.body.split("\n\n")[0].trim();
+    const also = [...gone].filter((g) => g !== id);
+    this.store.log({ actor: this.actor, action: "delete", card: id, detail: `deleted ${id}: ${reason}${also.length ? ` (with ${also.join(", ")})` : ""}` });
   }
 
   // The replacement spec of a confirmed proposal for `card`, if the user picked A.
@@ -410,12 +525,34 @@ export class Board {
     }
     this.store.save(d);
     this.store.log({ actor: this.actor, action: "record", card: d.id, detail: q ? `answers ${q.id}: ${d.title}` : d.title });
-    // D-11 / S-29: the last blocking question answered approves the spec. A design question
-    // approves only when its answer is A; "Needs changes" leaves the spec waiting.
+    // S-53: A on a delete question deletes the card; B keeps it.
+    const del = q?.links.find((l) => l.type === "deletes");
+    if (q && del) {
+      if (/^A\./.test(d.title)) this.deleteCard(q, del.target);
+      return d;
+    }
+    // S-46: a design question answered with a variant (or "Approve this design") records the choice
+    // and approves the spec; "Needs changes" (or a free answer) leaves it waiting.
+    if (q?.design) {
+      const spec = q.links.find((l) => l.type === "blocks")?.target;
+      const m = /^[A-Z]\.\s+(?:Variant ([A-Z])\b|(Approve this design))/.exec(d.title);
+      if (spec && this.store.has(spec) && m && !/; Other:/.test(d.title)) {
+        try {
+          new Designs(this.store, "user").choose(spec, m[1] ?? "");
+        } catch (e) {
+          this.addComment(q, `Not signed off: ${(e as Error).message}`);
+          this.store.save(q);
+          return d;
+        }
+        this.autoApprove(this.store.get(spec), m[1] ? `design approved (variant ${m[1]})` : "design approved");
+      }
+      return d;
+    }
+    // D-11 / S-29: the last blocking question answered approves the spec.
     // S-35: a replacement answer settles the old spec only; the replacement still needs its own approval.
-    if (q && !(q.design && !/^A\./.test(d.title)) && !q.links.some((l) => l.type === "replaces"))
+    if (q && !q.links.some((l) => l.type === "replaces"))
       for (const id of q.links.filter((l) => l.type === "blocks").map((l) => l.target))
-        if (this.store.has(id)) this.autoApprove(this.store.get(id), q.design ? "design approved" : "all questions answered");
+        if (this.store.has(id)) this.autoApprove(this.store.get(id), "all questions answered");
     return d;
   }
 

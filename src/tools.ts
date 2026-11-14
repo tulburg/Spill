@@ -3,14 +3,15 @@ import { Designs, type Artboard } from "./designs";
 import { screenshot } from "./render";
 import type { Card, Focus, SpillEvent } from "./store";
 
-export function summary(c: Card): string {
-  return `${c.id.padEnd(6)} ${c.status.padEnd(10)} ${c.title}${c.section ? `  [${c.section}]` : ""}`;
+// S-49: ver is a spec's version label ("v3", "v3 new"), shown after its status.
+export function summary(c: Card, ver?: string): string {
+  return `${c.id.padEnd(6)} ${c.status.padEnd(10)} ${ver ? `${ver.padEnd(7)}` : ""}${c.title}${c.section ? `  [${c.section}]` : ""}`;
 }
 
-export function full(c: Card): string {
+export function full(c: Card, ver?: string): string {
   const links = c.links.length ? c.links.map((l) => `${l.type} ${l.target}`).join(", ") : "none";
   return [
-    `${c.id} (${c.kind}, ${c.status}) ${c.title}`,
+    `${c.id}${ver ? ` ${ver}` : ""} (${c.kind}, ${c.status}) ${c.title}`,
     `Section: ${c.section ?? "none"}`,
     `Links: ${links}`,
     "",
@@ -56,9 +57,9 @@ interface Tool {
 export const TOOLS: Tool[] = [
   {
     name: "spill_board",
-    description: "Summary of every card on the board: id, status, title, section.",
+    description: "Summary of every card on the board: id, status, version (specs: v2, or \"v3 new\" when a newer version waits for approval), title, section.",
     inputSchema: { type: "object", properties: {} },
-    run: (b) => [rejectionLine(b), focusLine(b.focus()), "", b.board().map(summary).join("\n") || "The board is empty."].filter((l) => l !== null).join("\n"),
+    run: (b) => [rejectionLine(b), focusLine(b.focus()), "", b.board().map((c) => summary(c, c.kind === "spec" ? b.versionLabel(c) : undefined)).join("\n") || "The board is empty."].filter((l) => l !== null).join("\n"),
   },
   {
     name: "spill_get",
@@ -68,20 +69,20 @@ export const TOOLS: Tool[] = [
       const c = b.get(a.id);
       // S-35: the files Claude recorded building the spec.
       const files = b.files(c.id);
-      const base = files.length ? `${full(c)}\n\n## Files\n${files.map((f) => `${f.change.padEnd(8)} ${f.path}`).join("\n")}` : full(c);
+      const ver = c.kind === "spec" ? b.versionLabel(c) : undefined;
+      const base = files.length ? `${full(c, ver)}\n\n## Files\n${files.map((f) => `${f.change.padEnd(8)} ${f.path}`).join("\n")}` : full(c, ver);
       // S-34: what changed since the approved version, so Claude can explain the update.
       const ch = b.changesSinceApproved(c);
       if (!ch) return base;
-      const add = ch.lines.filter((l) => l.op === "add").length;
-      const del = ch.lines.length - add;
-      const shown = ch.lines.filter((l) => l.text.trim()).slice(0, 20).map((l) => `${l.op === "add" ? "+" : "-"} ${l.text}`);
-      return `${base}\n\n## Changes since the approved version (${minute(ch.at)}): +${add} -${del} lines\n${shown.join("\n")}`;
+      const n = (op: string) => ch.lines.filter((l) => l.op === op).length;
+      const shown = ch.lines.filter((l) => l.text.trim()).slice(0, 20).map((l) => `${l.op === "add" ? "+" : l.op === "mod" ? "~" : "-"} ${l.text}`);
+      return `${base}\n\n## Changes since the approved version (${minute(ch.at)}): +${n("add")} -${n("del")} ~${n("mod")} lines\n${shown.join("\n")}`;
     },
   },
   {
     name: "spill_ask",
     description:
-      'Create a Q-n question for the user, optionally blocking specs. One question per card. Body: context in the first paragraph, then options as "- A. text" lines (the app turns them into answer buttons). If the answer picks no option, it is a redirect: record it if it is an answer of its own, drop the question if the user says it should not exist, or rewrite this same question if it was unclear. Never ask a new one for the same thing. For a design sign-off pass design: true with the board link in the body; it must block the spec and gets the options "A. Approve this design" / "B. Needs changes".',
+      'Create a Q-n question for the user, optionally blocking specs. One question per card. Body: context in the first paragraph, then options as "- A. text" lines (the app turns them into answer buttons). If the answer picks no option, it is a redirect: record it if it is an answer of its own, drop the question if the user says it should not exist, or rewrite this same question if it was unclear. Never ask a new one for the same thing. For the design sign-off of a spec (the only way a spec with designs is approved) pass design: true, blocking exactly that spec, and list no options: the app builds them from the designs, one per variant ("Variant A: ...") or "Approve this design", then "Needs changes". A variant or "Approve this design" approves the spec and marks it chosen.',
     inputSchema: {
       type: "object",
       properties: {
@@ -90,7 +91,7 @@ export const TOOLS: Tool[] = [
         section: str,
         blocks: { ...strList, description: "Spec IDs this question blocks. Always set it when the question stops work on a spec, including an active one." },
         multi: { type: "boolean", description: "The user may pick several options (multi select). Default: pick one." },
-        design: { type: "boolean", description: "A design approval question. Answer A approves the spec it blocks." },
+        design: { type: "boolean", description: "The spec's design sign-off. Options are built from its designs; a variant (or Approve this design) approves the spec." },
       },
       required: ["title"],
     },
@@ -117,7 +118,12 @@ export const TOOLS: Tool[] = [
     description:
       "Move a card to a new status. Specs: draft, discussing, active (only a queued spec, or a done spec with an open update request; one at a time, before you write code), done (after recording checks), replaced (a done spec whose replacement the user confirmed with A on spill_propose_replace's question, after you removed its code and recorded the removed files). Questions: open (to reopen a question), answered, dropped (also when a redirect says the question should not exist). Cannot set approved, queued or rejected; only the user can. Check the card's current status first. Never leave a spec active when you stop building it: set done, block it with a question, or set discussing in the same step.",
     inputSchema: { type: "object", properties: { id: str, status: str, note: { ...str, description: "Optional comment added with the change" } }, required: ["id", "status"] },
-    run: (b, a) => `Moved ${summary(b.setStatus(a))}`,
+    run: (b, a) => {
+      const c = b.setStatus(a);
+      // S-48: the moment a build starts is when the todo list is due.
+      const todo = c.kind === "spec" && c.status === "active" ? `\nNext: record your todo list for this build with spill_todos (every item, each with done), before writing code, and send the full list again as you finish items. It drives the card's progress bar.` : "";
+      return `Moved ${summary(c)}${todo}`;
+    },
   },
   {
     name: "spill_comment",
@@ -170,6 +176,13 @@ export const TOOLS: Tool[] = [
       "Propose deleting and replacing a done spec (id) with another spec (by), when an update is too big for it and it should not stay. Creates a question naming both specs and the files from id's Files list, blocking by. Nothing is deleted until the user picks A. On A: remove id's implementation, record the removed files with spill_files, then spill_set_status id replaced with a note on what was removed. On B: keep id and spill_link by follows id instead.",
     inputSchema: { type: "object", properties: { id: str, by: str, reason: { ...str, description: "One or two sentences on why the update needs a replacement" } }, required: ["id", "by"] },
     run: (b, a) => `Created ${summary(b.proposeReplace(a))}`,
+  },
+  {
+    name: "spill_propose_delete",
+    description:
+      "Propose deleting a card that should not exist: a duplicate, or a change drafted as a new spec that belongs on an existing one. Creates a question \"Delete <id>?\" (A. Delete it / B. Keep it) with your reason. Nothing is deleted until the user picks A; then the card, every link to it, and its open questions that block nothing else are removed. Only specs in draft, discussing, approved or rejected, and open or dropped questions; a done spec goes through spill_propose_replace. Never delete any other way, and never use it to undo the user's rejection. On B, keep the card and do not propose it again unless something changes.",
+    inputSchema: { type: "object", properties: { id: str, reason: { ...str, description: "One or two sentences on why the card should not exist" } }, required: ["id", "reason"] },
+    run: (b, a) => `Created ${summary(b.proposeDelete(a))}`,
   },
   {
     name: "spill_rejections",
@@ -342,7 +355,7 @@ function designTools(): Tool[] {
     {
       name: "spill_design_feedback",
       description:
-        "The user's review of a spec's designs: whether the design (or each variant) is accepted, rejected with a reason, or waiting; every open pin with its number, artboard, position (x, y in artboard px from the top left) and note; open comments; the replies on each; and a count of resolved notes (resolved ones are cleared from the user's view and not listed). Pins and comments also reach spill_inbox. Work through the open notes: change the design for each, then reply with what changed and resolve it in the same spill_design_reply call. Leave a note open only when you need the user's answer; reply with the question.",
+        "The user's review of a spec's designs: which variant (or the whole design) the design question chose, if answered; every open pin with its number, artboard, position (x, y in artboard px from the top left) and note; open comments; the replies on each; and a count of resolved notes (resolved ones are cleared from the user's view and not listed). Pins and comments also reach spill_inbox. Work through the open notes: change the design for each, then reply with what changed and resolve it in the same spill_design_reply call. Leave a note open only when you need the user's answer; reply with the question.",
       inputSchema: { type: "object", properties: { spec }, required: ["spec"] },
       run: (b, a) => {
         const f = d(b).feedback(a.spec);
@@ -351,8 +364,7 @@ function designTools(): Tool[] {
         const replies = (rs: { by: string; text: string }[], pad: string) => rs.map((r) => `${pad}${r.by === "claude" ? "You" : "User"}: ${r.text}`);
         const out: string[] = [];
         for (const k of keys) {
-          const r = f.reviews[k];
-          out.push(`${k ? `Variant ${k}` : "Design"}: ${r ? r.status : "waiting"}${r?.reason ? `: ${r.reason}` : ""}`);
+          out.push(`${k ? `Variant ${k}` : "Design"}: ${f.chosen && f.chosen.variant === k ? "chosen" : "waiting"}`);
           for (const p of f.pins.filter((x) => !x.resolved && (f.pinKey[x.n] ?? "") === k)) {
             const ab = f.artboards.find((x) => x.id === p.artboard);
             out.push(`  Pin ${p.n} on ${p.artboard}${ab ? ` "${ab.title}"` : ""} at (${p.x}, ${p.y}): ${p.text}`, ...replies(p.replies, "    "));
