@@ -61,43 +61,6 @@
       }
     ]
   },
-  "S-46": {
-    "at": "2026-11-14T06:47:49.609Z",
-    "items": [
-      {
-        "text": "Shift+click is the only pin gesture in both views",
-        "done": true
-      },
-      {
-        "text": "Remove Accept, Reject and Undo from the viewer",
-        "done": true
-      },
-      {
-        "text": "Design question options built from variants",
-        "done": true
-      },
-      {
-        "text": "Answer approves the spec and records the chosen variant",
-        "done": true
-      },
-      {
-        "text": "Open designs link on the question; card Approve points to it",
-        "done": true
-      },
-      {
-        "text": "Chosen marks in viewer, sheet and snapshot",
-        "done": true
-      },
-      {
-        "text": "Instructions, tool descriptions, SPILL.md",
-        "done": true
-      },
-      {
-        "text": "Tests and check on a board copy",
-        "done": true
-      }
-    ]
-  },
   "S-45": {
     "at": "2026-11-14T06:54:04.408Z",
     "items": [
@@ -124,6 +87,60 @@
       {
         "text": "Check in browser and in the built app",
         "done": true
+      }
+    ]
+  },
+  "S-46": {
+    "at": "2026-11-15T07:26:01.327Z",
+    "items": [
+      {
+        "text": "Tool state (pointer default, reset on open) and C/V keys, ignored in inputs and with modifiers",
+        "done": true
+      },
+      {
+        "text": "Comment tool: plain click pins, comment cursor without Shift",
+        "done": true
+      },
+      {
+        "text": "Hints show the current tool",
+        "done": true
+      },
+      {
+        "text": "Test both views on a board copy",
+        "done": true
+      }
+    ]
+  },
+  "S-54": {
+    "at": "2026-11-15T07:54:28.821Z",
+    "items": [
+      {
+        "text": "Log module: path under ~/.spill/logs, JSON lines, 2 MB trim, read with filters",
+        "done": true
+      },
+      {
+        "text": "Server: failed API requests and uncaught errors; /api/log for the page",
+        "done": true
+      },
+      {
+        "text": "MCP: failed tool calls with cut arguments",
+        "done": true
+      },
+      {
+        "text": "Page: uncaught errors, failed fetches, shown errors, disabled button clicks",
+        "done": true
+      },
+      {
+        "text": "App: board server output and unexpected exits to the log",
+        "done": true
+      },
+      {
+        "text": "spill logs CLI and spill_logs tool; MCP instructions and SPILL.md",
+        "done": true
+      },
+      {
+        "text": "Tests and checks",
+        "done": false
       }
     ]
   }

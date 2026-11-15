@@ -1,4 +1,5 @@
 import { Board } from "./board";
+import { cut, writeLog } from "./log";
 import { Store } from "./store";
 import { TOOLS } from "./tools";
 
@@ -41,6 +42,7 @@ Rules:
 - A user comment "Fix failing check: <name>" (the app's Fix button): set the spec active, fix it, run the checks again, record them, set it done.
 - Other user comments on a card are feedback on that card: act on them or reply with spill_comment.
 - Inbox lines with action "message" are board-level messages: answer each with spill_reply. Each line says its thread ("new thread" or "in thread of <time>"); pass that time as thread when answering an older thread. Files the user attached are listed as "[attached: path, ...]"; read them before answering.
+- When the user reports something that did not work (a button that did nothing, an action that failed), read spill_logs before guessing: it has failed requests, failed tool calls, page errors and clicks on disabled buttons with their reason.
 - Keep spill_focus current: what is being discussed now and what is next.
 - While you work, call spill_inbox again between steps and before asking anything, so approvals and answers are not missed.`;
 
@@ -71,6 +73,9 @@ export function handle(store: Store, msg: Msg): object | undefined {
         const out = tool.run(new Board(store, "claude"), msg.params?.arguments ?? {});
         return reply(typeof out === "string" ? { content: [{ type: "text", text: out }] } : out);
       } catch (e) {
+        // S-54 req 3: a failed tool call goes to the diagnostic log, with its (cut) arguments.
+        const args = msg.params?.arguments ?? {};
+        writeLog(store, { source: "mcp", level: "error", what: tool.name, card: typeof args.id === "string" ? args.id : typeof args.spec === "string" ? args.spec : undefined, message: `${(e as Error).message} (arguments: ${JSON.stringify(cut(args))})` });
         return reply({ content: [{ type: "text", text: (e as Error).message }], isError: true });
       }
     }

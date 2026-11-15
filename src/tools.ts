@@ -1,5 +1,6 @@
 import type { Board } from "./board";
 import { Designs, type Artboard } from "./designs";
+import { formatLog, readLog } from "./log";
 import { screenshot } from "./render";
 import type { Card, Focus, SpillEvent } from "./store";
 
@@ -268,6 +269,12 @@ export const TOOLS: Tool[] = [
   },
   // S-44: design tools, named and shaped after OpenDraw's MCP tools.
   ...designTools(),
+  {
+    name: "spill_logs",
+    description: "The project's diagnostic log (S-54): failed board requests, failed MCP tool calls, errors in the board page, clicks on disabled buttons with the reason, and the board server's output in the app. Read it when the user reports something that did not work. Newest last.",
+    inputSchema: { type: "object", properties: { limit: { type: "number", description: "Last n entries (default 50)" }, level: { type: "string", enum: ["error", "warn", "info"], description: "Only entries of this level" } } },
+    run: (b, a) => readLog(b.store, { limit: a.limit ?? 50, level: a.level }).map(formatLog).join("\n") || "The log is empty.",
+  },
 ];
 
 function boardLine(x: Artboard): string {

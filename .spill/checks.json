@@ -607,33 +607,48 @@
     ]
   },
   "S-36": {
-    "at": "2026-11-02T09:28:33.939Z",
+    "at": "2026-11-14T21:24:35.927Z",
     "running": false,
     "results": [
       {
         "name": "Open Recent lists both projects, newest first",
         "pass": true,
-        "detail": "Recent file order verified; menu confirmed by the user (D-25)"
+        "detail": "Unchanged; confirmed by you in D-25"
       },
       {
-        "name": "Recent project opens on a free port, or brings its window forward",
+        "name": "Recent project opens on a free port, or comes forward",
         "pass": true,
-        "detail": "Free ports in one app process; reopening started no second server"
+        "detail": "Unchanged; confirmed in D-25"
       },
       {
-        "name": "Open Project on a folder without .spill shows an error",
+        "name": "Open Project... on a folder without .spill shows an error",
         "pass": true,
-        "detail": "Alert shown, nothing opened; picker confirmed by the user (D-25)"
+        "detail": "Unchanged"
       },
       {
         "name": "Window menu lists both and switches",
         "pass": true,
-        "detail": "Confirmed by the user (D-25)"
+        "detail": "Unchanged; confirmed in D-25"
       },
       {
         "name": "Closing a window removes it and stops its server",
         "pass": true,
-        "detail": "Confirmed by the user (D-25)"
+        "detail": "Unchanged; confirmed in D-25"
+      },
+      {
+        "name": "Quit with two projects, open again: both windows come back",
+        "pass": true,
+        "detail": "Test instance, two scratch projects: relaunched with no project, both windows reopened on new ports and the front one got the focus (3 runs)."
+      },
+      {
+        "name": "Close every window, quit, open: most recent project opens",
+        "pass": true,
+        "detail": "Test instance: closed both windows through the window close path (a temporary test-only socket command calling close, the same event the close button sends, since removed). The saved list went from 2 to 1 to empty, the app quit, and both servers stopped. A relaunch with no project opened the most recent project."
+      },
+      {
+        "name": "A saved project whose folder was deleted is skipped",
+        "pass": true,
+        "detail": "Removed one project's .spill: launch opened only the other, no alert."
       }
     ]
   },
@@ -768,7 +783,7 @@
     ]
   },
   "S-45": {
-    "at": "2026-11-14T06:54:22.571Z",
+    "at": "2026-11-15T07:23:20.133Z",
     "running": false,
     "results": [
       {
@@ -788,8 +803,8 @@
       },
       {
         "name": "Native window per spec; reuse; close with project",
-        "pass": false,
-        "detail": "Test app instance on a board copy: a native window 'S-54 designs, Spill' opened beside the board; asking again reused it; S-55 opened its own; close from the page closed it. Not verified: closing the project window closes its design windows, and the Window menu entries (no accessibility access to drive the app)."
+        "pass": true,
+        "detail": "Test app: a native window per spec opened, was reused, and closed from the page. You confirmed in the app (D-40) that closing the project window closes its design windows and that the Window menu lists them."
       },
       {
         "name": "Browser opens its own URL in a named tab",
@@ -809,43 +824,53 @@
     ]
   },
   "S-46": {
-    "at": "2026-11-14T06:47:49.712Z",
+    "at": "2026-11-15T07:26:01.341Z",
     "running": false,
     "results": [
       {
-        "name": "Shift+click pins in both views; a plain click does not",
+        "name": "Shift+click pin in both views; plain click with the pointer opens no note box",
         "pass": true,
-        "detail": "Board copy: on a single artboard a plain click opened no note box, Shift+click did; the pin saved with its position and reached the inbox as design_pin."
+        "detail": "Board copy: a plain click with the pointer tool picked variant B on the whole board and did nothing on one artboard; no note box either time. The Shift+click path is unchanged."
       },
       {
-        "name": "Cursor: comment cursor only with Shift",
+        "name": "Cursor: pointer without Shift, comment cursor with Shift",
         "pass": true,
-        "detail": "Without Shift the single artboard shows the pan cursor (crosshair gone); the Shift rule is shared by both views."
+        "detail": "Unchanged with the pointer tool (one artboard keeps its grab cursor for panning)."
       },
       {
         "name": "No Accept or Reject in the viewer",
         "pass": true,
-        "detail": "Board copy: the panel has no buttons, only notes and the comment box."
+        "detail": "Unchanged."
       },
       {
-        "name": "Design question options and approval",
+        "name": "Design question options and chosen variant",
         "pass": true,
-        "detail": "Board copy: Q-44 offered Variant A, Variant B, Needs changes; answering B auto-approved S-54 (design approved (variant B)). A spec without variants gets Approve this design / Needs changes (unit test and Q-45)."
+        "detail": "Unchanged; unit tests pass (69)."
       },
       {
-        "name": "Approve gated; Open designs link",
+        "name": "Approve disabled while the design question is open; Open designs",
         "pass": true,
-        "detail": "Card Approve disabled with 'Answer Q-44 to approve'; Open designs on the question opened the viewer."
+        "detail": "Unchanged."
       },
       {
-        "name": "Replies and resolve",
+        "name": "Replies show; resolving clears pins and comments",
         "pass": true,
-        "detail": "Existing tests pass."
+        "detail": "Unchanged."
       },
       {
-        "name": "Feedback lists open notes and chosen state",
+        "name": "Feedback lists open notes and a resolved count",
         "pass": true,
-        "detail": "spill_design_feedback shows 'Variant B: chosen'; sheet, viewer label and the v1 snapshot mark B Chosen."
+        "detail": "Unchanged; unit tests pass."
+      },
+      {
+        "name": "C: plain click pins with the comment cursor; V: back to pointer; hint follows",
+        "pass": true,
+        "detail": "Board copy, whole board and one artboard: after C, a plain click opened the note box and the cursor (including inside the design) was the comment cursor; after V, a plain click picked a variant again with the pointer cursor. The hint and panel hint switched between 'Shift+click to pin a note, C for comment tool' and 'Click to pin a note, V for pointer'."
+      },
+      {
+        "name": "Typing c or v in a note box, or Cmd+C, keeps the tool; reopening starts on the pointer",
+        "pass": true,
+        "detail": "Typed 'cv test' into the note box: the text landed and the tool stayed. Cmd+C left the comment tool on. Each new design window starts on the pointer, and the tool resets whenever the viewer opens."
       }
     ]
   },
@@ -961,6 +986,52 @@
         "name": "Deleted id is not reused",
         "pass": true,
         "detail": "Unit test: next spec after deleting S-2 is S-3."
+      }
+    ]
+  },
+  "S-54": {
+    "at": "2026-11-15T07:56:08.995Z",
+    "running": false,
+    "results": [
+      {
+        "name": "Refused approve shows in spill logs with route, card and error",
+        "pass": true,
+        "detail": "Unit test and on a copy of the Ascend board: 'POST /api/cards/S-2/approve S-2: 400 S-2 has open questions: Q-4.'"
+      },
+      {
+        "name": "Failing MCP call logged with tool, arguments and error",
+        "pass": true,
+        "detail": "Unit test: spill_set_status active on a draft spec logs the tool, card and error, with a 500-character note cut to 200."
+      },
+      {
+        "name": "Click on a disabled Approve logs its reason",
+        "pass": true,
+        "detail": "Board copy in the browser: 'info ui disabled button \"Approve\" S-2: disabled: Answer the open questions first'. Checked in the browser pane; the app's WebKit view was not driven."
+      },
+      {
+        "name": "Exception in the board page reaches the log",
+        "pass": true,
+        "detail": "A thrown error in the page logged as 'error ui page: Error: probe ...' with its stack."
+      },
+      {
+        "name": "App: board server output and unexpected exit logged",
+        "pass": true,
+        "detail": "Test app instance: the server's startup line logged as source app, and stopping the server logged 'exited unexpectedly (signal: 15 (SIGTERM)) on port 53775'. The app and the server compute the same file name."
+      },
+      {
+        "name": "Past 2 MB the file stays under 2 MB with the newest entries",
+        "pass": true,
+        "detail": "Unit test: 9000 entries (about 2.2 MB) leave the file under the cap, newest entry last."
+      },
+      {
+        "name": "spill_logs matches spill logs, filtered by level",
+        "pass": true,
+        "detail": "Unit test for spill_logs with level error and info; spill logs and --errors checked by hand on the copy."
+      },
+      {
+        "name": "Log under ~/.spill/logs, nothing in git status",
+        "pass": true,
+        "detail": "File is <log dir>/<project>-<hash>.log; tests use a temp log dir; the repo has no .spill/logs and git status shows no log file."
       }
     ]
   }

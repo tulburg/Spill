@@ -4,6 +4,7 @@ import { createConnection } from "node:net";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { Board } from "./board";
+import { formatLog, logFile, readLog } from "./log";
 import { serve } from "./mcp";
 import { startServer } from "./server";
 import { Store, findSpillDir } from "./store";
@@ -21,6 +22,7 @@ const USAGE = `spill: the spec board, from the terminal
   spill comment ID text           comment on a card
   spill ask "title" [body]        add a question for Claude
   spill log [n]                   last n events (default 20)
+  spill logs [--errors] [n]       the diagnostic log: what failed and why (default last 50)
   spill focus                     what Claude is discussing now and next
   spill message text [--file p]   message Claude, not about any card, optionally with files
   spill app [port]                open the board in a Spill window (adds a window if Spill is open)
@@ -158,6 +160,14 @@ function main(argv: string[]): void {
     case "log": {
       const n = Number(rest[0] ?? 20);
       console.log(store.events().slice(-n).map(event).join("\n") || "No events yet.");
+      break;
+    }
+    // S-54 req 8: the diagnostic log, newest last.
+    case "logs": {
+      const errors = rest.includes("--errors");
+      const n = Number(rest.find((r) => /^\d+$/.test(r)) ?? 50);
+      const lines = readLog(store, { limit: n, level: errors ? "error" : undefined }).map(formatLog);
+      console.log(lines.join("\n") || `The log is empty (${logFile(store)}).`);
       break;
     }
     default:

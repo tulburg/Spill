@@ -193,8 +193,8 @@ export class Board {
     if (args.status === "approved" && card.kind === "spec") {
       const open = this.openQuestions(card);
       if (open.length) throw new Error(`${card.id} has open questions: ${open.join(", ")}. Answer them first.`);
-      // S-46: a spec with designs is approved through its design question.
-      if (new Designs(this.store).awaitingReview(card.id)) throw new Error(`${card.id} has designs waiting for sign-off. Answer its design question first.`);
+      // S-46 req 8: an open design question blocks approval like any open question (above). Once it is
+      // answered, even in the user's own words with no variant chosen, the user can approve by hand.
     }
     const from = card.status;
     card.status = args.status;

@@ -1,7 +1,8 @@
 // The Spill app (S-36, D-22): one process holds a window per project. Each window shows its
 // project's board, served by `spill serve` (bun), which the app starts on a free port and stops
 // when the window closes. `spill app` hands its folder to a running app over a Unix socket, or
-// starts the app with the folder in SPILL_OPEN. Recent projects live in ~/.spill/recent.
+// starts the app with the folder in SPILL_OPEN. Recent projects live in ~/.spill/recent, the
+// windows to resume on the next launch in ~/.spill/session.
 use std::fs;
 use std::io::{BufRead, BufReader, Write};
 use std::net::{TcpListener, TcpStream};
@@ -104,6 +105,194 @@ fn touch_recent(root: &Path, name: &str) {
     write_recent(&lines);
 }
 
+// ~/.spill/session: the project windows open now, in the order they opened, one
+// "front<TAB>path" line each (front is 1 for the window in front). Written whenever a project
+// window opens, is closed by hand, or comes to the front; never on quit, so Quit keeps the list
+// and closing the last window by hand leaves it empty (S-36 reqs 8-9).
+fn write_session(app: &AppHandle, closing: Option<&str>) {
+    let state = app.state::<AppState>();
+    let w = state.0.lock().unwrap();
+    // A design window in front counts as its project's window.
+    let front = w.focused.as_ref().map(|f| w.designs.iter().find(|d| &d.label == f).map(|d| d.project.clone()).unwrap_or_else(|| f.clone()));
+    let text: String = w
+        .open
+        .iter()
+        .filter(|p| Some(p.label.as_str()) != closing && app.get_webview_window(&p.label).is_some())
+        .map(|p| format!("{}\t{}\n", u8::from(front.as_deref() == Some(p.label.as_str())), p.root.display()))
+        .collect();
+    drop(w);
+    let _ = fs::create_dir_all(spill_home());
+    let _ = fs::write(spill_home().join("session"), text);
+}
+
+// The saved windows whose board still exists, in order, and which one was in front.
+fn read_session() -> (Vec<PathBuf>, Option<PathBuf>) {
+    let text = fs::read_to_string(spill_home().join("session")).unwrap_or_default();
+    let mut roots = Vec::new();
+    let mut front = None;
+    for l in text.lines() {
+        let Some((f, path)) = l.split_once('\t') else { continue };
+        let root = PathBuf::from(path);
+        if !root.join(".spill").is_dir() || roots.contains(&root) {
+            continue;
+        }
+        if f == "1" {
+            front = Some(root.clone());
+        }
+        roots.push(root);
+    }
+    (roots, front)
+}
+
+// Launch (S-36 reqs 9-11): open the project asked for, if any, and the saved windows, then bring
+// the right one forward. With neither, open the most recent project, or ask for a folder.
+fn restore(app: &AppHandle, asked: Option<(PathBuf, Option<u16>)>) {
+    let (saved, saved_front) = read_session();
+    let asked_root = asked.as_ref().and_then(|(d, _)| find_root(d));
+    if asked.is_none() && saved.is_empty() {
+        match read_recent().into_iter().map(|(_, p)| p).find(|p| p.join(".spill").is_dir()) {
+            Some(p) => open_project(app, &p, None),
+            None => on_menu(app, "open"),
+        }
+        return;
+    }
+    if let Some((dir, port)) = &asked {
+        open_project(app, dir, *port);
+    }
+    for root in &saved {
+        if Some(root) != asked_root.as_ref() {
+            open_project(app, root, None);
+        }
+    }
+    // Windows open as their servers start; wait for them, then focus the front one last.
+    let Some(front) = asked_root.or(saved_front) else { return };
+    let start = Instant::now();
+    while start.elapsed() < Duration::from_secs(20) {
+        let pending = {
+            let state = app.state::<AppState>();
+            let w = state.0.lock().unwrap();
+            w.open.iter().any(|p| app.get_webview_window(&p.label).is_none())
+        };
+        if !pending {
+            break;
+        }
+        thread::sleep(Duration::from_millis(100));
+    }
+    // A window just built can still take the focus as it is ordered in, so keep the front one
+    // focused for a couple of seconds.
+    let Some(label) = app.state::<AppState>().0.lock().unwrap().open.iter().find(|p| p.root == front).map(|p| p.label.clone()) else { return };
+    for _ in 0..4 {
+        thread::sleep(Duration::from_millis(500));
+        if app.state::<AppState>().0.lock().unwrap().focused.as_deref() != Some(label.as_str()) {
+            focus_window(app, &label);
+        }
+    }
+}
+
+// S-54: the project's diagnostic log, the same file the board server writes (src/log.ts):
+// $SPILL_LOG_DIR or ~/.spill/logs, named <project>-<FNV-1a hash of the project folder>.log.
+const LOG_MAX: u64 = 2 * 1024 * 1024;
+
+fn log_file(root: &Path) -> PathBuf {
+    let dir = std::env::var("SPILL_LOG_DIR").map(PathBuf::from).unwrap_or_else(|_| spill_home().join("logs"));
+    let mut name = String::new();
+    for c in project_name(root).chars() {
+        if c.is_ascii_alphanumeric() || "._-".contains(c) {
+            name.push(c);
+        } else if !name.ends_with('-') {
+            name.push('-');
+        }
+    }
+    let mut h: u32 = 0x811c9dc5;
+    for b in root.to_string_lossy().as_bytes() {
+        h = (h ^ u32::from(*b)).wrapping_mul(0x01000193);
+    }
+    dir.join(format!("{name}-{h:08x}.log"))
+}
+
+fn json_str(s: &str) -> String {
+    let mut out = String::from("\"");
+    for c in s.chars() {
+        match c {
+            '"' => out.push_str("\\\""),
+            '\\' => out.push_str("\\\\"),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            c if (c as u32) < 0x20 => out.push_str(&format!("\\u{:04x}", c as u32)),
+            c => out.push(c),
+        }
+    }
+    out.push('"');
+    out
+}
+
+// The current time as ISO 8601 UTC, like JavaScript's toISOString.
+fn now_iso() -> String {
+    let d = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default();
+    let (secs, ms) = (d.as_secs() as i64, d.subsec_millis());
+    let (days, rem) = (secs.div_euclid(86400), secs.rem_euclid(86400));
+    // Civil date from days since 1970-01-01 (Howard Hinnant's algorithm).
+    let z = days + 719468;
+    let era = z.div_euclid(146097);
+    let doe = z - era * 146097;
+    let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let day = doy - (153 * mp + 2) / 5 + 1;
+    let month = if mp < 10 { mp + 3 } else { mp - 9 };
+    let year = yoe + era * 400 + i64::from(month <= 2);
+    format!("{year:04}-{month:02}-{day:02}T{:02}:{:02}:{:02}.{ms:03}Z", rem / 3600, rem / 60 % 60, rem % 60)
+}
+
+fn write_log(root: &Path, level: &str, what: &str, message: &str) {
+    let f = log_file(root);
+    if let Some(dir) = f.parent() {
+        let _ = fs::create_dir_all(dir);
+    }
+    let message: String = if message.chars().count() > 2000 { message.chars().take(2000).collect::<String>() + "..." } else { message.to_string() };
+    let line = format!("{{\"at\":{},\"source\":\"app\",\"level\":{},\"what\":{},\"message\":{}}}\n", json_str(&now_iso()), json_str(level), json_str(what), json_str(&message));
+    if let Ok(mut file) = fs::OpenOptions::new().create(true).append(true).open(&f) {
+        let _ = file.write_all(line.as_bytes());
+    }
+    // Past the cap, drop the oldest half.
+    if fs::metadata(&f).map(|m| m.len() > LOG_MAX).unwrap_or(false) {
+        if let Ok(text) = fs::read_to_string(&f) {
+            let lines: Vec<&str> = text.lines().collect();
+            let _ = fs::write(&f, lines[lines.len() / 2..].join("\n") + "\n");
+        }
+    }
+}
+
+// S-54 req 6: a board server's output goes to its project's log instead of nowhere.
+fn log_output<R: std::io::Read + Send + 'static>(root: PathBuf, pipe: Option<R>, level: &'static str) {
+    let Some(pipe) = pipe else { return };
+    thread::spawn(move || {
+        for line in BufReader::new(pipe).lines().map_while(Result::ok) {
+            if !line.trim().is_empty() {
+                write_log(&root, level, "board server", &line);
+            }
+        }
+    });
+}
+
+// S-54 req 6: log a board server that exits while its window is still open.
+fn watch_server(app: AppHandle, label: String) {
+    thread::spawn(move || loop {
+        thread::sleep(Duration::from_secs(2));
+        let state = app.state::<AppState>();
+        let mut w = state.0.lock().unwrap();
+        let Some(p) = w.open.iter_mut().find(|p| p.label == label) else { return };
+        if let Ok(Some(status)) = p.server.try_wait() {
+            let root = p.root.clone();
+            let port = p.port;
+            drop(w);
+            write_log(&root, "error", "board server", &format!("exited unexpectedly ({status}) on port {port}"));
+            return;
+        }
+    });
+}
+
 fn alert(title: &str, message: &str) {
     let q = |s: &str| s.replace('\\', "\\\\").replace('"', "\\\"");
     let _ = Command::new("osascript").args(["-e", &format!("display alert \"{}\" message \"{}\"", q(title), q(message))]).status();
@@ -159,8 +348,12 @@ fn open_project(app: &AppHandle, dir: &Path, port: Option<u16>) {
     let bun = bun_path();
     let cli = std::env::var("SPILL_CLI").unwrap_or_else(|_| concat!(env!("CARGO_MANIFEST_DIR"), "/../src/cli.ts").into());
     let port = pick_port(port);
-    let server = match Command::new(bun).arg(cli).arg("serve").arg(port.to_string()).current_dir(&root).stdout(Stdio::null()).spawn() {
-        Ok(c) => c,
+    let server = match Command::new(bun).arg(cli).arg("serve").arg(port.to_string()).current_dir(&root).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn() {
+        Ok(mut c) => {
+            log_output(root.clone(), c.stdout.take(), "info");
+            log_output(root.clone(), c.stderr.take(), "error");
+            c
+        }
         Err(e) => {
             alert("Could not start the board", &format!("{}: {e}", root.display()));
             return;
@@ -174,6 +367,7 @@ fn open_project(app: &AppHandle, dir: &Path, port: Option<u16>) {
         label
     };
     touch_recent(&root, &name);
+    watch_server(app.clone(), label.clone());
 
     // Wait for the server off the main thread, then open the window on it.
     let app = app.clone();
@@ -207,6 +401,7 @@ fn open_project(app: &AppHandle, dir: &Path, port: Option<u16>) {
             alert("Could not open the window", &e.to_string());
             return;
         }
+        write_session(&app, None);
         refresh_menu(&app);
     });
 }
@@ -469,10 +664,12 @@ fn listen(app: AppHandle) {
 }
 
 fn main() {
-    // A second launch hands its folder to the running app and quits.
-    let dir = std::env::var("SPILL_OPEN").map(PathBuf::from).unwrap_or_else(|_| std::env::current_dir().unwrap_or_else(|_| ".".into()));
-    let port = std::env::var("SPILL_PORT").ok().and_then(|p| p.parse::<u16>().ok());
+    // `spill app` names its folder in SPILL_OPEN; a launch from the Dock, Finder or Spotlight names
+    // none and resumes the saved windows (S-36). A second launch hands its folder to the running
+    // app and quits.
+    let asked = std::env::var("SPILL_OPEN").ok().map(|d| (PathBuf::from(d), std::env::var("SPILL_PORT").ok().and_then(|p| p.parse::<u16>().ok())));
     if let Ok(mut s) = UnixStream::connect(socket_path()) {
+        let Some((dir, port)) = &asked else { return };
         if s.write_all(format!("open\t{}\t{}\n", dir.display(), port.map(|p| p.to_string()).unwrap_or_default()).as_bytes()).is_ok() {
             return;
         }
@@ -485,7 +682,7 @@ fn main() {
             app.set_menu(build_menu(&handle)?)?;
             app.on_menu_event(|app, event| on_menu(app, event.id().as_ref()));
             listen(handle.clone());
-            thread::spawn(move || open_project(&handle, &dir, port));
+            thread::spawn(move || restore(&handle, asked));
             Ok(())
         })
         .on_window_event(|window, event| {
@@ -493,8 +690,11 @@ fn main() {
             match event {
                 WindowEvent::Focused(true) => {
                     app.state::<AppState>().0.lock().unwrap().focused = Some(window.label().to_string());
+                    write_session(app, None);
                     refresh_menu(app);
                 }
+                // Closed by hand (not by Quit): drop it from the saved windows.
+                WindowEvent::CloseRequested { .. } => write_session(app, Some(window.label())),
                 WindowEvent::Destroyed => {
                     close_project(app, window.label());
                     refresh_menu(app);

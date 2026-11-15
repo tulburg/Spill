@@ -58,8 +58,8 @@ Questions show their options right on the card. Pick one (or several for multi-c
 
 UI specs own their designs. Claude draws artboards with the `spill_design_*` tools, and they render in the spec's Overview and in a larger canvas with zoom, pan and keyboard stepping. Designs render in a shadow root with scripts stripped, so they cannot affect Spill or run code.
 
-- **Review in place.** Click an artboard to pin a note to a spot, comment on the whole design, and accept or reject it (or each variant) with a reason. Claude reads the feedback and replies on each pin.
-- **Approval gate.** A spec with designs cannot be approved until a design (or a variant) is accepted.
+- **Review in place.** Shift+click an artboard (or press C for the comment tool) to pin a note to a spot, or comment on the whole design. Claude reads the feedback, replies on each note and resolves it once it has acted.
+- **Design sign-off.** Claude asks one design question per spec, blocking it. Its options are the variants (or "Approve this design") plus "Needs changes"; picking one approves the spec and marks the variant chosen. Answered in your own words instead, the question still unblocks the spec and you approve it by hand.
 
 ![Reviewing a design with pinned notes](docs/screenshots/design-review.jpg)
 

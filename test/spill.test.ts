@@ -4,11 +4,15 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Board } from "../src/board";
 import { Designs } from "../src/designs";
+import { LOG_MAX, logFile, readLog, writeLog } from "../src/log";
 import { handle } from "../src/mcp";
+import { startServer } from "../src/server";
 import { lineDiff } from "../src/diff";
 import { Store, formatCard, parseCard } from "../src/store";
 
 const REPO_SPILL = join(import.meta.dir, "..", ".spill");
+// S-54: tests never write to the real ~/.spill/logs.
+process.env.SPILL_LOG_DIR = mkdtempSync(join(tmpdir(), "spill-logs-"));
 
 let dir: string;
 let store: Store;
@@ -448,7 +452,7 @@ describe("mcp", () => {
   const call = (name: string, args: object = {}) =>
     handle(store, { jsonrpc: "2.0", id: 1, method: "tools/call", params: { name, arguments: args } }) as any;
 
-  test("initialize and list the 29 tools", () => {
+  test("initialize and list the 30 tools", () => {
     const init = handle(store, { jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2025-06-18" } }) as any;
     expect(init.result.serverInfo.name).toBe("spill");
     const list = handle(store, { jsonrpc: "2.0", id: 2, method: "tools/list" }) as any;
@@ -456,6 +460,7 @@ describe("mcp", () => {
       "spill_board", "spill_get", "spill_ask", "spill_draft_spec", "spill_update",
       "spill_set_status", "spill_comment", "spill_link", "spill_unlink", "spill_record", "spill_files", "spill_propose_replace", "spill_propose_delete", "spill_rejections", "spill_focus", "spill_checks", "spill_todos", "spill_reply", "spill_inbox",
       "spill_design_list", "spill_design_create_artboard", "spill_design_write_html", "spill_design_read", "spill_design_update_styles", "spill_design_duplicate", "spill_design_delete", "spill_design_screenshot", "spill_design_feedback", "spill_design_reply",
+      "spill_logs",
     ]);
   });
 
@@ -677,13 +682,13 @@ describe("approval separate from building (S-29)", () => {
     expect(() => claude.ask({ title: "d", design: true })).toThrow(/must block/);
     expect(() => claude.ask({ title: "d", blocks: ["S-1"], design: true })).toThrow(/no designs yet/);
     call("spill_design_create_artboard", { spec: "S-1", title: "Home", styles: { width: 400, height: 300 } });
-    expect(() => user.setStatus({ id: "S-1", status: "approved" })).toThrow(/design question/);
     const q = claude.ask({ title: "Design for S-1", body: "Look it over.\n- A. Yes\n- B. No", blocks: ["S-1"], design: true });
     expect(q.design).toBe(true);
     expect(q.body.trim()).toBe("Look it over.\n\n- A. Approve this design\n- B. Needs changes");
     expect(parseCard(formatCard(q)).design).toBe(true);
     user.answer({ id: q.id, text: "make it blue" });
     expect(status(q.id)).toBe("open");
+    expect(() => user.setStatus({ id: "S-1", status: "approved" })).toThrow(/open questions/);
     user.answer({ id: q.id, picks: ["A"] });
     expect(status("S-1")).toBe("approved");
     expect(autoLine()).toEqual(["S-1 draft -> approved (auto: design approved)"]);
@@ -701,6 +706,20 @@ describe("approval separate from building (S-29)", () => {
     expect(status("S-2")).toBe("approved");
     expect(new Designs(store).list("S-2")[0].artboards.map((x) => [x.variant, x.status])).toEqual([["A", "waiting"], ["B", "chosen"]]);
     expect(call("spill_design_feedback", { spec: "S-2" }).result.content[0].text).toContain("Variant B: chosen");
+  });
+
+  test("a design question answered in the user's own words leaves Approve to the user (S-46 req 8)", () => {
+    const call = (name: string, args: object) => handle(store, { jsonrpc: "2.0", id: 1, method: "tools/call", params: { name, arguments: args } }) as any;
+    claude.draftSpec({ title: "a" });
+    call("spill_design_create_artboard", { spec: "S-1", title: "Calm", variant: "A", styles: { width: 400, height: 300 } });
+    call("spill_design_create_artboard", { spec: "S-1", title: "Bold", variant: "B", styles: { width: 400, height: 300 } });
+    const q = claude.ask({ title: "Design for S-1", blocks: ["S-1"], design: true });
+    user.answer({ id: q.id, text: "Ok, B with a darker sky" });
+    claude.record({ title: "B with a darker sky", question: q.id });
+    expect(status(q.id)).toBe("answered");
+    expect(status("S-1")).toBe("draft");
+    user.setStatus({ id: "S-1", status: "approved" });
+    expect(status("S-1")).toBe("approved");
   });
 });
 
@@ -902,7 +921,6 @@ describe("designs", () => {
     writeFileSync(f, JSON.stringify({ next: 1, nextNote: 1, pins: [], notes: [], reviews: { A: { status: "accepted", at: "x" } } }));
     expect((new Designs(store, "user") as any).review).toBeUndefined();
     expect(new Designs(store).list("S-1")[0].artboards.map((x) => x.status)).toEqual(["waiting", "waiting"]);
-    expect(() => user.setStatus({ id: "S-1", status: "approved" })).toThrow(/design question/);
     expect(JSON.parse(readFileSync(f, "utf8")).reviews.A.status).toBe("accepted");
   });
 
@@ -937,5 +955,52 @@ describe("designs", () => {
     call("spill_design_create_artboard", { spec: "S-1", title: "Home", styles: { width: 400, height: 300 } });
     claude.update({ id: "S-1", body: "y" });
     expect(new Designs(store).snapshots("S-1")).toHaveLength(0);
+  });
+});
+
+describe("diagnostic log (S-54)", () => {
+  const call = (name: string, args: object = {}) =>
+    handle(store, { jsonrpc: "2.0", id: 1, method: "tools/call", params: { name, arguments: args } }) as any;
+
+  test("lives under the log dir, named by project and folder hash, never in .spill", () => {
+    const f = logFile(store);
+    expect(f.startsWith(process.env.SPILL_LOG_DIR!)).toBe(true);
+    expect(f).toMatch(/\/Spill-[0-9a-f]{8}\.log$/);
+    expect(f.includes(".spill/")).toBe(false);
+  });
+
+  test("a failed MCP call is logged with the tool, cut arguments and error; spill_logs reads it", () => {
+    claude.draftSpec({ title: "a" });
+    expect(call("spill_set_status", { id: "S-1", status: "active", note: "x".repeat(500) }).result.isError).toBe(true);
+    const [e] = readLog(store);
+    expect(e.source).toBe("mcp");
+    expect(e.what).toBe("spill_set_status");
+    expect(e.card).toBe("S-1");
+    expect(e.message).toContain("queued");
+    expect(e.message).not.toContain("x".repeat(300));
+    expect(call("spill_logs", { level: "error" }).result.content[0].text).toContain("spill_set_status S-1");
+    expect(call("spill_logs", { level: "info" }).result.content[0].text).toBe("The log is empty.");
+  });
+
+  test("keeps the newest entries under 2 MB", () => {
+    const big = "y".repeat(150);
+    for (let i = 0; i < 9000; i++) writeLog(store, { source: "server", level: "info", what: `n${i}`, message: big });
+    expect(readFileSync(logFile(store)).length).toBeLessThanOrEqual(LOG_MAX);
+    expect(readLog(store, { limit: 1 })[0].what).toBe("n8999");
+  });
+
+  test("the board server logs refused requests and accepts page entries", async () => {
+    claude.draftSpec({ title: "a" });
+    claude.ask({ title: "q", blocks: ["S-1"] });
+    const server = await startServer(store, 0);
+    const base = `http://localhost:${server.port}`;
+    const r = await fetch(`${base}/api/cards/S-1/approve`, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
+    expect(r.status).toBe(400);
+    await fetch(`${base}/api/log`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ level: "info", what: 'disabled button "Approve"', message: "disabled: Answer the open questions first", card: "S-1" }) });
+    server.stop(true);
+    const log = readLog(store);
+    expect(log[0]).toMatchObject({ source: "server", level: "error", what: "POST /api/cards/S-1/approve", card: "S-1" });
+    expect(log[0].message).toContain("open questions");
+    expect(log[1]).toMatchObject({ source: "ui", level: "info", card: "S-1", message: "disabled: Answer the open questions first" });
   });
 });

@@ -116,6 +116,7 @@ The `spill` MCP server exposes these tools (all take the project from the workin
 | `spill_checks`       | Record a spec's acceptance check results (`running: true` first, then `results`) so its card shows them. |
 | `spill_reply`        | Answer a board-level message (inbox action `message`); `thread` picks an older thread. |
 | `spill_inbox`        | List what changed since your last call: answers, new user questions, approvals, rejections, messages. |
+| `spill_logs`         | The diagnostic log: failed board requests, failed tool calls, page errors, clicks on disabled buttons with their reason, board server output. Read it when the user says something did not work. |
 
 ## 3. Workflow, every session
 
@@ -234,9 +235,12 @@ spill show ID                   spill reject S-n reason
 spill answer Q-n text|A|A,C     spill comment ID text
 spill ask "title" [body]        spill log [n]
 spill focus                     spill app
-spill message text [--file p]
+spill message text [--file p]   spill logs [--errors] [n]
 spill serve [port]
 ```
+
+`spill logs` prints the project's diagnostic log (S-54), kept under `~/.spill/logs/` so it is never
+committed: what failed and why, newest last.
 
 `spill app` opens the board in a Spill window, where specs can also be approved, built or rejected. With Spill already open it adds a window to the running app; File > Open Recent and Open Project... open other boards, and the Window menu lists the open ones.
 

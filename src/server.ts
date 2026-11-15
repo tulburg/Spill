@@ -4,6 +4,7 @@ import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { Board } from "./board";
 import { Designs } from "./designs";
+import { writeLog } from "./log";
 import type { Store } from "./store";
 
 const UI_DIR = join(import.meta.dir, "..", "ui");
@@ -110,10 +111,40 @@ export async function startServer(store: Store, port = 4747) {
     }
   };
 
+  // S-54 req 2: every API request that fails (4xx or 5xx) and every error a route throws goes to the
+  // project's diagnostic log, with its route, card and error text.
+  type Handler = (req: any) => Response | Promise<Response>;
+  const wrap = (path: string, h: Handler): Handler => async (req) => {
+    try {
+      const res = await h(req);
+      if (res.status >= 400 && path.startsWith("/api/") && path !== "/api/log") {
+        const text = await res.clone().text();
+        let message = text;
+        try {
+          message = JSON.parse(text).error ?? text;
+        } catch {}
+        writeLog(store, { source: "server", level: "error", what: `${req.method} ${new URL(req.url).pathname}`, card: req.params?.id ?? req.params?.spec, message: `${res.status} ${message}` });
+      }
+      return res;
+    } catch (e) {
+      writeLog(store, { source: "server", level: "error", what: `${req.method} ${new URL(req.url).pathname}`, card: req.params?.id ?? req.params?.spec, message: (e as Error).stack ?? String(e) });
+      return json({ error: (e as Error).message }, 500);
+    }
+  };
+  const logged = (routes: Record<string, any>) =>
+    Object.fromEntries(
+      Object.entries(routes).map(([path, r]) => [
+        path,
+        typeof r === "function" ? wrap(path, r) : r && typeof r === "object" && !(r instanceof Response) ? Object.fromEntries(Object.entries(r).map(([m, h]) => [m, wrap(path, h as Handler)])) : r,
+      ]),
+    );
+  for (const ev of ["uncaughtException", "unhandledRejection"] as const)
+    process.on(ev, (e: unknown) => writeLog(store, { source: "server", level: "error", what: ev, message: (e as Error)?.stack ?? String(e) }));
+
   const server = Bun.serve({
     port,
     idleTimeout: 0,
-    routes: {
+    routes: logged({
       "/": () => new Response(Bun.file(join(UI_DIR, "index.html"))),
       "/app.css": () => new Response(Bun.file(join(UI_DIR, "app.css"))),
       "/logo.svg": () => new Response(Bun.file(join(UI_DIR, "logo.svg")), { headers: { "content-type": "image/svg+xml" } }),
@@ -258,7 +289,15 @@ export async function startServer(store: Store, port = 4747) {
       "/api/cards/:id/comment": {
         POST: (req) => act(req, (b) => user().comment({ id: req.params.id, text: b.text })),
       },
-    },
+      // S-54 req 4-5: the board page's errors, failed fetches, shown errors and disabled clicks.
+      "/api/log": {
+        POST: (req) =>
+          act(req, (b) => {
+            const level = ["error", "warn", "info"].includes(b.level) ? b.level : "error";
+            writeLog(store, { source: "ui", level, what: String(b.what ?? "page").slice(0, 120), card: typeof b.card === "string" && /^[A-Z]+-\d+$/.test(b.card) ? b.card : undefined, message: String(b.message ?? "") });
+          }),
+      },
+    }),
   });
   return server;
 }

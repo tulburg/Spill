@@ -560,8 +560,9 @@ button.opt:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(var(--amber
 
 .empty { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 14px; }
 
-/* Side sheet (S-22, board 10A): docks right, the canvas stays live beside it. */
-body.sheet-open #canvas { right: 572px; }
+/* Side sheet (S-22, board 10A): floats over the right of the canvas, which runs under it and stays
+   live; centering a card keeps it clear of the sheet. */
+body.sheet-open #canvas { scroll-padding-right: 572px; }
 .card[data-id] { cursor: pointer; }
 .card.selected { outline: 2px solid var(--indigo); outline-offset: 4px; }
 /* The sheet wraps its content, up to the window height; past that the body scrolls. */
@@ -1101,7 +1102,7 @@ button.fix:disabled { border-color: var(--border); color: var(--faint); cursor: 
 .dzv-body { flex: 1; min-height: 0; display: flex; position: relative; }
 .dzv-body .dzv-stage { flex: 1; }
 /* Comment cursor: a pin with a plus, its tail (bottom left) is the spot the pin lands on. */
-.shift-pin .dzv-stage.can-pin:not(.dragging) .dzv-ab { cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='26' height='26' viewBox='0 0 26 26'%3E%3Cpath d='M2 24V12A10 10 0 1 1 12 22H4Z' fill='%2318181b' stroke='%23fff' stroke-width='2' stroke-linejoin='round'/%3E%3Cpath d='M12 8v8M8 12h8' stroke='%23fff' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E") 2 24, crosshair; }
+.shift-pin .dzv-stage.can-pin:not(.dragging) .dzv-ab, .comment-tool .dzv-stage.can-pin:not(.dragging) .dzv-ab { cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='26' height='26' viewBox='0 0 26 26'%3E%3Cpath d='M2 24V12A10 10 0 1 1 12 22H4Z' fill='%2318181b' stroke='%23fff' stroke-width='2' stroke-linejoin='round'/%3E%3Cpath d='M12 8v8M8 12h8' stroke='%23fff' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E") 2 24, crosshair; }
 .dzv-back { display: inline-flex; align-items: center; gap: 6px; margin-left: 4px; padding: 4px 10px; border: 1px solid var(--border); border-radius: 8px; background: none; font: inherit; font-size: 12px; color: var(--text-2); cursor: pointer; }
 .dzv-back:hover { background: var(--canvas); color: var(--text); }
 .dzv-ab { position: relative; }

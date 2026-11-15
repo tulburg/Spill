@@ -406,9 +406,38 @@ function buildTree(): Node[] {
 // ---------- actions ----------
 
 async function post(path: string, body: object): Promise<string | undefined> {
-  const r = await fetch(path, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
-  if (!r.ok) return (await r.json()).error ?? "Something went wrong";
+  let r: Response;
+  try {
+    r = await fetch(path, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+  } catch (e) {
+    logUI("error", `POST ${path}`, `Could not reach the board: ${(e as Error).message}`);
+    return "Could not reach the board. Is it still running?";
+  }
+  // A refused request is logged by the server itself (S-54 req 2).
+  if (!r.ok) return (await r.json().catch(() => ({}))).error ?? "Something went wrong";
 }
+
+// ---------- diagnostic log (S-54) ----------
+
+// Sends one entry to the project's diagnostic log. Never throws, and never logs its own failure.
+function logUI(level: "error" | "warn" | "info", what: string, message: string, card?: string) {
+  fetch("/api/log", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ level, what, message: message.slice(0, 2000), card }), keepalive: true }).catch(() => {});
+}
+window.addEventListener("error", (e) => logUI("error", "page", e.error?.stack ?? `${e.message} (${e.filename}:${e.lineno})`));
+window.addEventListener("unhandledrejection", (e) => logUI("error", "page", (e.reason as Error)?.stack ?? String(e.reason)));
+// S-54 req 5: a press on a disabled button does nothing visible, so log it with the reason it is
+// disabled (its tooltip). Browsers send no click to a disabled button; the pointerdown still lands
+// on the page, so look for a disabled button under the pointer.
+document.addEventListener(
+  "pointerdown",
+  (e) => {
+    const b = document.elementsFromPoint(e.clientX, e.clientY).find((el) => el instanceof HTMLButtonElement) as HTMLButtonElement | undefined;
+    if (!b?.disabled) return;
+    const card = b.closest<HTMLElement>("[data-id]")?.dataset.id ?? (b.closest(".sheet") ? openId ?? undefined : undefined);
+    logUI("info", `disabled button "${b.textContent?.trim().slice(0, 40) ?? ""}"`, b.title ? `disabled: ${b.title}` : "disabled, no reason shown", card);
+  },
+  true,
+);
 
 // ---------- focus (S-12, S-14) ----------
 
@@ -812,12 +841,6 @@ function specActions(c: Card, draft?: () => string): HTMLElement | null {
     approve.disabled = true;
     approve.title = "Answer the open questions first";
   }
-  // S-46: a spec with designs is approved through its design question, not from here.
-  const designGate = !building && !openQs.length && awaitingDesign(c.id);
-  if (designGate) {
-    approve.disabled = true;
-    approve.title = "Approved through its design question";
-  }
   approve.onclick = async () => {
     approve.disabled = reject.disabled = true;
     const e = await post(`/api/cards/${c.id}/${building ? "build" : "approve"}`, {});
@@ -875,9 +898,6 @@ function specActions(c: Card, draft?: () => string): HTMLElement | null {
     h("div", { class: "actions" }, c.status === "queued" ? null : approve, reject),
     ...(openQs.length
       ? [h("div", { class: "gate" }, "Answer ", openQs.flatMap((q, i) => [i ? (i === openQs.length - 1 ? " and " : ", ") : "", h("button", { class: "qid", onclick: () => panTo(q.id) }, q.id)]), " to approve")]
-      : []),
-    ...(designGate
-      ? [h("div", { class: "gate" }, "Its designs are signed off by a design question; Claude asks one. ", h("button", { class: "qid", onclick: () => openDesigns(c.id, variantsOf(c.id).length ? "board" : "one") }, "Open designs"))]
       : []),
     err,
   );
@@ -1688,7 +1708,6 @@ interface DesignFeedback {
 const feedbackOf = (spec: string): DesignFeedback => data.feedback?.[spec] ?? { pins: [], notes: [], reviews: {}, pinKey: {} };
 const keyOfBoard = (spec: string, a: Artboard) => (variantsIn(vBoards(spec)).includes(a.variant) ? a.variant : "");
 // S-46: true while a spec has designs and its design question has not chosen one: Approve waits.
-const awaitingDesign = (spec: string) => designsOf(spec).length > 0 && !feedbackOf(spec).chosen;
 
 // Drafts live outside the DOM so live redraws keep the text, the focus and the caret.
 let review: {
@@ -1847,7 +1866,7 @@ function reviewPanel(spec: string, key: string, mode: "one" | "board"): HTMLElem
   const list = h(
     "div",
     { class: "dzr-list" },
-    items.length ? items.map((x) => x.el) : h("div", { class: "dzr-empty" }, readOnly ? "No notes on this version." : "No notes yet. Shift+click a spot on an artboard to pin one."),
+    items.length ? items.map((x) => x.el) : h("div", { class: "dzr-empty" }, readOnly ? "No notes on this version." : `No notes yet. ${tool === "comment" ? "Click" : "Shift+click"} a spot on an artboard to pin one.`),
   );
   // Keep the list where it was scrolled; the frame callback runs once it is mounted, before paint.
   const listTop = document.querySelector(".dzr-list")?.scrollTop ?? 0;
@@ -1860,7 +1879,7 @@ function reviewPanel(spec: string, key: string, mode: "one" | "board"): HTMLElem
     { class: "dzr-foot" },
     h("div", { class: "reason comment" }, box),
     review.err ? h("div", { class: "err" }, review.err) : null,
-    h("div", { class: "hint" }, "Shift+click to pin a note"),
+    h("div", { class: "hint" }, pinHint()),
   );
   return h("div", { class: "dzr" }, head, list, foot);
 }
@@ -1967,9 +1986,16 @@ function openViewer(spec: string, mode: "one" | "board", id?: string, keepReview
   if (!keepReview && viewer?.spec !== spec) Object.assign(review, loadDraft(spec));
   // S-47: moving between one artboard and the whole board stays on the same snapshot.
   const s = keepReview && viewer?.spec === spec ? viewer.snap : snap;
+  if (!viewer) setTool("pointer");
   viewer = { spec, mode, id: undefined, zoom: null, x: 0, y: 0, snap: s };
   viewer.id = mode === "one" ? (id ?? vBoards(spec)[0]?.id) : undefined;
   render();
+}
+// S-46 req 13: the viewer's tool. With the comment tool a plain click pins; C and V switch.
+let tool: "pointer" | "comment" = "pointer";
+function setTool(t: typeof tool) {
+  tool = t;
+  document.documentElement.classList.toggle("comment-tool", t === "comment");
 }
 // Holding Shift shows the comment cursor on the whole board before the click that pins.
 function shiftPin(on: boolean) {
@@ -1978,6 +2004,11 @@ function shiftPin(on: boolean) {
 window.addEventListener("keydown", (e) => e.key === "Shift" && shiftPin(true));
 window.addEventListener("keyup", (e) => e.key === "Shift" && shiftPin(false));
 window.addEventListener("blur", () => shiftPin(false));
+
+// S-46 req 14: the hint names the current tool.
+function pinHint() {
+  return tool === "comment" ? "Click to pin a note, V for pointer" : "Shift+click to pin a note, C for comment tool";
+}
 
 function closeViewer() {
   // S-45: in a design window, closing the viewer closes the window.
@@ -2085,7 +2116,7 @@ function viewerPanel(): HTMLElement | null {
                 { class: "dzv-set" },
                 boards
                   .filter((a) => !variants.length || a.variant === vr)
-                  .map((a) => h("div", { class: "dzv-item", ondblclick: () => openViewer(v.spec, "one", a.id, true) }, abView(a, !readOnly), h("div", { class: "dzv-cap" }, a.title))),
+                  .map((a) => h("div", { class: "dzv-item" }, abView(a, !readOnly), h("div", { class: "dzv-cap" }, a.title))),
               ),
             ),
           ),
@@ -2094,7 +2125,7 @@ function viewerPanel(): HTMLElement | null {
   world.style.transform = `translate(${v.x}px, ${v.y}px) scale(${z0})`;
   world.style.setProperty("--iz", String(1 / z0));
 
-  const stage = h("div", { class: `dzv-stage${!readOnly ? " can-pin" : ""}` }, world, h("div", { class: "dzv-hint" }, readOnly ? "Read only. Drag to pan, pinch or Cmd scroll to zoom, Esc to close" : one ? "Shift+click to pin a note, drag to pan, pinch or Cmd scroll to zoom, arrows to step, Esc to close" : `Shift+click to pin a note, ${variants.length ? "click a variant to see its notes, " : ""}double-click an artboard to focus it, Esc to close`), one ? h("div", { class: "dzv-pos" }, `${boards.indexOf(one) + 1} / ${boards.length}`) : null);
+  const stage = h("div", { class: `dzv-stage${!readOnly ? " can-pin" : ""}` }, world, h("div", { class: "dzv-hint" }, readOnly ? "Read only. Drag to pan, pinch or Cmd scroll to zoom, Esc to close" : one ? `${pinHint()}, drag to pan, pinch or Cmd scroll to zoom, arrows to step, Esc to close` : `${pinHint()}, ${variants.length ? "click a variant to see its notes, " : ""}double-click an artboard to focus it, Esc to close`), one ? h("div", { class: "dzv-pos" }, `${boards.indexOf(one) + 1} / ${boards.length}`) : null);
   // Drag pans; a click without a drag drops a pin (one artboard) or picks a variant (whole board).
   // Pinch, Cmd or Ctrl scroll zooms at the pointer; plain scroll pans.
   let drag: { x: number; y: number; vx: number; vy: number; moved: boolean; target: HTMLElement } | null = null;
@@ -2105,6 +2136,13 @@ function viewerPanel(): HTMLElement | null {
     drag = { x: e.clientX, y: e.clientY, vx: v.x, vy: v.y, moved: false, target: t };
     stage.setPointerCapture(e.pointerId);
     stage.classList.add("dragging");
+  });
+  // The stage captures the pointer to pan, so the browser sends clicks and double-clicks to the stage,
+  // not the artboard: find the artboard under the pointer to focus it.
+  stage.addEventListener("dblclick", (e) => {
+    if (one) return;
+    const ab = document.elementFromPoint(e.clientX, e.clientY)?.closest(".dzv-item")?.querySelector<HTMLElement>(".dzv-ab");
+    if (ab?.dataset.ab) openViewer(v.spec, "one", ab.dataset.ab, true);
   });
   stage.addEventListener("pointermove", (e) => {
     shiftPin(e.shiftKey);
@@ -2118,9 +2156,9 @@ function viewerPanel(): HTMLElement | null {
     stage.classList.remove("dragging");
     if (!d || d.moved) return;
     const ab = d.target.closest<HTMLElement>(".dzv-ab");
-    if (ab && !readOnly && e.shiftKey) {
+    if (ab && !readOnly && (e.shiftKey || tool === "comment")) {
       // S-46 req 1: Shift+click pins, in both views; on the whole board it also picks that artboard's
-      // variant, so the panel shows the pin's thread. A plain click never pins.
+      // variant, so the panel shows the pin's thread. A plain click pins only with the comment tool.
       const r = ab.getBoundingClientRect();
       const x = Math.round((e.clientX - r.left) / viewerZ);
       const y = Math.round((e.clientY - r.top) / viewerZ);
@@ -2207,7 +2245,11 @@ window.addEventListener(
     else if (e.key === "=" || e.key === "+") zoomViewer(viewerZ * 1.25);
     else if (e.key === "-") zoomViewer(viewerZ / 1.25);
     else if (e.key === "0") zoomViewer(1);
-    else return;
+    // S-46 req 13: C and V pick the tool on live designs; Cmd+C and Cmd+V stay copy and paste.
+    else if ((e.key === "c" || e.key === "v") && !viewer.snap && !e.metaKey && !e.ctrlKey && !e.altKey) {
+      setTool(e.key === "c" ? "comment" : "pointer");
+      render();
+    } else return;
     e.stopImmediatePropagation();
   },
   true,
