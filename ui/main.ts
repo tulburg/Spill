@@ -1205,7 +1205,9 @@ function answeredView(c: Card, opts: { letter: string; text: string }[], answer:
 // S-26: a redirect waits until Claude acts on it: an update rewrites the question; recording or dropping closes it.
 function redirectNote(c: Card): string | null {
   if (c.kind !== "question" || c.status !== "open") return null;
-  const evs = data.events.filter((e) => e.card === c.id && (e.action === "redirect" || e.action === "update"));
+  // An edit to the question, or any status change (answered, then reopened), settles an earlier
+  // redirect; otherwise a reopened question would hide its options behind the old answer.
+  const evs = data.events.filter((e) => e.card === c.id && (e.action === "redirect" || e.action === "update" || e.action === "status"));
   const last = evs[evs.length - 1];
   return last?.action === "redirect" ? (last.detail ?? "") : null;
 }
@@ -1369,6 +1371,12 @@ function drawLines(content: HTMLElement) {
     if (isNew(c)) return "var(--indigo-line)";
     return "var(--line)";
   };
+  const flows: string[] = [];
+  const dots: string[] = [];
+  const line = (d: string, c: Card) => {
+    const flow = c.status === "active" && !stalledOn(c).length && !quietFor(c);
+    (flow ? flows : paths).push(`<path d="${d}" stroke="${color(c)}"${flow ? ' class="flow"' : ""}/>`);
+  };
   const dotColor = (c: Card) => (c.kind === "spec" && c.status === "active" ? "var(--text)" : c.kind === "spec" && ["approved", "queued"].includes(c.status) ? "var(--green)" : c.kind === "question" && c.status === "open" ? "var(--amber)" : "var(--faint)");
 
   for (const nodeDiv of content.querySelectorAll<HTMLElement>(".node")) {
@@ -1395,9 +1403,9 @@ function drawLines(content: HTMLElement) {
         Math.abs(y2 - y1) < 28
           ? `M${x1} ${y1} C${x1 + 28} ${y1} ${x1 + 28} ${y2} ${x2} ${y2}`
           : `M${x1} ${y1} H${mx - r} Q${mx} ${y1} ${mx} ${y1 + r} V${y2 - r} Q${mx} ${y2} ${mx + r} ${y2} H${x2}`;
-      paths.push(`<path d="${d}" stroke="${color(c)}"${c.status === "active" && !stalledOn(c).length && !quietFor(c) ? ' class="flow"' : ""}/>`);
+      line(d, c);
     });
-    paths.push(`<circle cx="${x1}" cy="${y1}" r="3" fill="var(--card)" stroke="${dotColor(pc)}"/>`);
+    dots.push(`<circle cx="${x1}" cy="${y1}" r="3" fill="var(--card)" stroke="${dotColor(pc)}"/>`);
   }
   // Section headers branch down to their specs (S-11).
   for (const sec of content.querySelectorAll<HTMLElement>(".section:not(.collapsed)")) {
@@ -1412,12 +1420,13 @@ function drawLines(content: HTMLElement) {
       const y = kr.top - box.top + 26;
       const x2 = kr.left - box.left;
       const c = byId.get(k.dataset.id!)!;
-      paths.push(`<path d="M${x} ${y0} V${y - 10} Q${x} ${y} ${x + 10} ${y} H${x2}" stroke="${color(c)}"${c.status === "active" && !stalledOn(c).length && !quietFor(c) ? ' class="flow"' : ""}/>`);
+      line(`M${x} ${y0} V${y - 10} Q${x} ${y} ${x + 10} ${y} H${x2}`, c);
       any = true;
     }
-    if (any) paths.push(`<circle cx="${x}" cy="${y0}" r="3" fill="var(--card)" stroke="var(--faint)"/>`);
+    if (any) dots.push(`<circle cx="${x}" cy="${y0}" r="3" fill="var(--card)" stroke="var(--faint)"/>`);
   }
-  const el = svg(`<svg id="lines" width="${W}" height="${H}" fill="none" stroke-width="1.5">${paths.join("")}</svg>`);
+  // Paint order (S-27 req 8): plain lines, then the build line into the active card, then the dots.
+  const el = svg(`<svg id="lines" width="${W}" height="${H}" fill="none" stroke-width="1.5">${paths.join("")}${flows.join("")}${dots.join("")}</svg>`);
   content.prepend(el);
 }
 

@@ -97,9 +97,7 @@ export class Board {
     if (args.design) {
       if (args.blocks?.length !== 1) throw new Error("A design question must block exactly the one spec it signs off");
       if (args.multi) throw new Error("A design question takes one answer");
-      const opts = new Designs(this.store).signOffOptions(args.blocks[0]);
-      const lines = [...opts.map((o) => o.text), "Needs changes"].map((t, i) => `- ${String.fromCharCode(65 + i)}. ${t}`);
-      body = `${body.replace(/^\s*-\s*[A-Z]\.\s+.*$/gm, "").trim()}\n\n${lines.join("\n")}`.trim();
+      body = this.signOffBody(args.blocks[0], body);
     }
     const q = this.create("question", args.title, body, "open", args.section);
     if (args.multi) q.select = "multi";
@@ -134,6 +132,16 @@ export class Board {
     return s;
   }
 
+  // S-46 req 6: a design question's options always come from its spec's designs, whatever the body says.
+  private signOffBody(spec: string, body: string): string {
+    const opts = new Designs(this.store).signOffOptions(spec);
+    const lines = [...opts.map((o) => o.text), "Needs changes"].map((t, i) => `- ${String.fromCharCode(65 + i)}. ${t}`);
+    return `${body.replace(/^\s*-\s*[A-Z]\.\s+.*$/gm, "").trim()}\n\n${lines.join("\n")}`.trim();
+  }
+  private signedOffSpec(q: Card): string | undefined {
+    return q.kind === "question" && q.design ? q.links.find((l) => l.type === "blocks")?.target : undefined;
+  }
+
   update(args: { id: string; title?: string; body?: string; section?: string | null }): Card {
     const card = this.store.get(args.id);
     const changed: string[] = [];
@@ -143,7 +151,10 @@ export class Board {
     }
     if (args.body !== undefined) {
       const before = card.body;
-      card.body = args.body.trim() ? `${args.body.trim()}\n\n` : "";
+      // A rewritten design question keeps its options (rebuilt, so new variants show).
+      const spec = this.signedOffSpec(card);
+      const text = spec ? this.signOffBody(spec, args.body) : args.body;
+      card.body = text.trim() ? `${text.trim()}\n\n` : "";
       changed.push("body");
       // S-34: a spec keeps every version of its text. The first edit also saves the original.
       if (card.kind === "spec" && card.body.trim() !== before.trim()) {
@@ -198,6 +209,13 @@ export class Board {
     }
     const from = card.status;
     card.status = args.status;
+    // S-46 req 7: a design question reopened after rework offers the designs as they are now.
+    const signs = args.status === "open" ? this.signedOffSpec(card) : undefined;
+    if (signs) {
+      try {
+        card.body = `${this.signOffBody(signs, card.body)}\n\n`;
+      } catch {}
+    }
     if (args.note) this.addComment(card, args.note);
     if (replacedBy) {
       this.addLink(card, "replaced_by", replacedBy);

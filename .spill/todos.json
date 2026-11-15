@@ -143,5 +143,22 @@
         "done": false
       }
     ]
+  },
+  "S-27": {
+    "at": "2026-11-15T19:09:28.418Z",
+    "items": [
+      {
+        "text": "Paint flow lines after all other lines, dots last",
+        "done": true
+      },
+      {
+        "text": "Verify on a board copy",
+        "done": true
+      },
+      {
+        "text": "Record checks",
+        "done": true
+      }
+    ]
   }
 }

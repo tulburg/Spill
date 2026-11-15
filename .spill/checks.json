@@ -178,28 +178,13 @@
     ]
   },
   "S-27": {
-    "at": "2026-10-31T08:19:21.344Z",
+    "at": "2026-11-15T19:09:28.393Z",
     "running": false,
     "results": [
       {
-        "name": "Active spec: ink ring, tag, spinner, dots, progress",
-        "pass": true
-      },
-      {
-        "name": "Panel item ink with shimmer",
-        "pass": true
-      },
-      {
-        "name": "Connector lines into the active card ink and animated",
-        "pass": true
-      },
-      {
-        "name": "Done shows the green check",
-        "pass": true
-      },
-      {
-        "name": "No green on an active card or its panel item",
-        "pass": true
+        "name": "Build line painted above every other line, dots on top",
+        "pass": true,
+        "detail": "Board copy on :4791 with S-27 active: #lines children are 211 plain paths and dots in order, then the one flow path, then the circles. Reqs 1-7 code untouched."
       }
     ]
   },

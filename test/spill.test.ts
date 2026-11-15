@@ -708,6 +708,22 @@ describe("approval separate from building (S-29)", () => {
     expect(call("spill_design_feedback", { spec: "S-2" }).result.content[0].text).toContain("Variant B: chosen");
   });
 
+  test("a rewritten or reopened design question keeps its options, rebuilt from the designs (S-46 req 6)", () => {
+    const call = (name: string, args: object) => handle(store, { jsonrpc: "2.0", id: 1, method: "tools/call", params: { name, arguments: args } }) as any;
+    claude.draftSpec({ title: "a" });
+    call("spill_design_create_artboard", { spec: "S-1", title: "Calm", variant: "A", styles: { width: 400, height: 300 } });
+    call("spill_design_create_artboard", { spec: "S-1", title: "Bold", variant: "B", styles: { width: 400, height: 300 } });
+    const q = claude.ask({ title: "Design for S-1", blocks: ["S-1"], design: true });
+    claude.update({ id: q.id, body: "Redrawn to match the notes." });
+    expect(store.get(q.id).body.trim()).toBe("Redrawn to match the notes.\n\n- A. Variant A: Calm\n- B. Variant B: Bold\n- C. Needs changes");
+    user.answer({ id: q.id, picks: ["C"] });
+    call("spill_design_create_artboard", { spec: "S-1", title: "Warm", variant: "C", styles: { width: 400, height: 300 } });
+    claude.setStatus({ id: q.id, status: "open" });
+    expect(store.get(q.id).body).toContain("- C. Variant C: Warm\n- D. Needs changes");
+    user.answer({ id: q.id, picks: ["C"] });
+    expect(status("S-1")).toBe("approved");
+  });
+
   test("a design question answered in the user's own words leaves Approve to the user (S-46 req 8)", () => {
     const call = (name: string, args: object) => handle(store, { jsonrpc: "2.0", id: 1, method: "tools/call", params: { name, arguments: args } }) as any;
     claude.draftSpec({ title: "a" });
@@ -715,12 +731,22 @@ describe("approval separate from building (S-29)", () => {
     call("spill_design_create_artboard", { spec: "S-1", title: "Bold", variant: "B", styles: { width: 400, height: 300 } });
     const q = claude.ask({ title: "Design for S-1", blocks: ["S-1"], design: true });
     user.answer({ id: q.id, text: "Ok, B with a darker sky" });
-    claude.record({ title: "B with a darker sky", question: q.id });
+    const out = call("spill_record", { title: "B with a darker sky", question: q.id }).result.content[0].text;
+    expect(out).toContain("S-1's Approve button is enabled for the user");
     expect(status(q.id)).toBe("answered");
     expect(status("S-1")).toBe("draft");
     user.setStatus({ id: "S-1", status: "approved" });
     expect(status("S-1")).toBe("approved");
   });
+});
+
+test("changing an approved spec's text says it needs approval again", () => {
+  const call = (name: string, args: object) => (handle(store, { jsonrpc: "2.0", id: 1, method: "tools/call", params: { name, arguments: args } }) as any).result.content[0].text as string;
+  claude.draftSpec({ title: "a", body: "## Requirements\n1. One" });
+  expect(call("spill_update", { id: "S-1", body: "## Requirements\n1. One\n2. Two" })).not.toContain("approve it again");
+  user.setStatus({ id: "S-1", status: "approved" });
+  expect(call("spill_update", { id: "S-1", title: "b" })).not.toContain("approve it again");
+  expect(call("spill_update", { id: "S-1", body: "## Requirements\n1. One\n2. Two\n3. Three" })).toContain("set it to draft now (spill_set_status S-1 draft)");
 });
 
 describe("message threads (S-30)", () => {

@@ -92,7 +92,7 @@ export const TOOLS: Tool[] = [
         section: str,
         blocks: { ...strList, description: "Spec IDs this question blocks. Always set it when the question stops work on a spec, including an active one." },
         multi: { type: "boolean", description: "The user may pick several options (multi select). Default: pick one." },
-        design: { type: "boolean", description: "The spec's design sign-off. Options are built from its designs; a variant (or Approve this design) approves the spec." },
+        design: { type: "boolean", description: "The spec's design sign-off. Options are built from its designs (and rebuilt on spill_update and on reopen); a picked variant (or Approve this design) approves the spec. Never list options in the body." },
       },
       required: ["title"],
     },
@@ -110,9 +110,17 @@ export const TOOLS: Tool[] = [
   },
   {
     name: "spill_update",
-    description: "Edit a card's title, body, or section. Body replaces the whole card text above the comments.",
+    description: "Edit a card's title, body, or section. Body replaces the whole card text above the comments; on a design question the options are rebuilt from the designs, so leave them out. Changing what an approved, queued, active or done spec requires needs approval again: set it to draft in the same step and comment what changed.",
     inputSchema: { type: "object", properties: { id: str, title: str, body: str, section: str }, required: ["id"] },
-    run: (b, a) => `Updated ${summary(b.update(a))}`,
+    run: (b, a) => {
+      const before = a.body !== undefined ? b.get(a.id) : undefined;
+      const c = b.update(a);
+      const hint =
+        c.kind === "spec" && before && before.body !== c.body && ["approved", "queued", "active", "done"].includes(c.status)
+          ? `\n${c.id} is ${c.status} and its text changed. If this changes what it requires, set it to draft now (spill_set_status ${c.id} draft) and comment what changed: the user must approve it again before you build the change.`
+          : "";
+      return `Updated ${summary(c)}${hint}`;
+    },
   },
   {
     name: "spill_set_status",
@@ -153,9 +161,15 @@ export const TOOLS: Tool[] = [
   {
     name: "spill_record",
     description:
-      "Record a D-n decision. When it answers a question, pass that Q-n; the question is closed as answered. A free answer to a question (a redirect) that gives an answer of its own is recorded here too; one that says the question is wrong or unclear is not a decision.",
+      "Record a D-n decision. When it answers a question, pass that Q-n; the question is closed as answered. A free answer to a question (a redirect) that gives an answer of its own is recorded here too; one that says the question is wrong or unclear is not a decision. Recording an answer to a design question marks no variant chosen and approves nothing: tell the user the spec's Approve button is now enabled.",
     inputSchema: { type: "object", properties: { title: str, body: str, question: str, section: str }, required: ["title"] },
-    run: (b, a) => `Recorded ${summary(b.record(a))}`,
+    run: (b, a) => {
+      const d = b.record(a);
+      // A recorded answer to a design question approves nothing; say what the user does next.
+      const q = a.question ? b.get(a.question) : undefined;
+      const spec = q?.design ? q.links.find((l) => l.type === "blocks")?.target : undefined;
+      return `Recorded ${summary(d)}${spec ? `\n${q!.id} is answered, so ${spec}'s Approve button is enabled for the user. This answer marks no variant chosen and does not approve ${spec}: tell the user to press Approve.` : ""}`;
+    },
   },
   {
     name: "spill_files",

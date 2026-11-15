@@ -52,6 +52,11 @@ draft -> discussing -> approved -> queued -> active -> done
   **Only the user sets this.**
 - Reverted: the user can take an `approved`, `queued`, `active` or `done` spec back to `discussing`
   (`spill revert`). It shows as a `status` line ending "(reverted)" in `spill_inbox`; stop work on it.
+- Changed after approval: when you change the Purpose, Requirements, Out of scope or Acceptance
+  checks of an `approved`, `queued`, `active` or `done` spec, however the change was asked for
+  (chat, board, update request), set it to `draft` in the same step and comment what changed. The
+  update bumps its version and the card shows the diff since the approved version. The user must
+  approve it and press Build again before you build the change. A typo fix needs no new approval.
 - Update requested: on a `done` spec the user asks for an update instead of reverting. It shows as
   an `update_request` line in `spill_inbox`, and the card shows "Update requested" until you act:
   set the spec `active` when the update fits the spec as written (allowed without a new approval
@@ -155,8 +160,13 @@ The `spill` MCP server exposes these tools (all take the project from the workin
    them from the designs: one per variant ("Variant A: ...", "Variant B: ...") or "Approve this
    design", then "Needs changes". Answering with a variant (or "Approve this design") records it as
    the chosen one and approves the spec if nothing else is open. "Needs changes" leaves it waiting:
-   rework the design from the notes and the answer, then reopen the same question. A spec with
-   designs cannot be approved any other way.
+   rework the design from the notes and the answer, then reopen the same question (reopening and
+   `spill_update` rebuild its options from the designs; never write options into its body).
+   **A design question answered in the user's own words** (a redirect): if it picks a variant or
+   approves, record it with `spill_record`, passing the question, and tell the user the spec's
+   Approve button is now enabled. A recorded answer marks no variant chosen and approves nothing;
+   only the user's Approve does. If it asks for changes, rework and reopen. Never reopen an answered
+   design question just to get a button pick.
    Approval keeps a read-only copy of the spec's designs (S-47, D-35): later edits never change
    what was approved, and comparing with that version lists the design changes since.
    A spec with open questions cannot be approved. Read a card's current status right before you
@@ -187,8 +197,15 @@ The `spill` MCP server exposes these tools (all take the project from the workin
    replacement and `spill_rejections resolve` it with a note saying why.
    A rejected draft whose reason says what the user wants usually means "redraft": rewrite the
    same spec from the reason and move it back to `discussing`; do not open a new spec.
+   A rejection whose reason says the user meant to approve ("Approved", "approve is broken") is
+   the Approve button failing, not a rejection: read `spill_logs`, move the spec back to
+   `discussing` with a comment saying what blocked Approve, and tell the user.
 9. **Stay in sync.** The user acts in the app while you work: call `spill_inbox` between steps and
    before asking anything.
+   **Something did not work?** When the user reports a button or flow that failed, read
+   `spill_logs` before guessing and tell them what failed and why. A flow that fails twice is a
+   Spill bug: say so and stop. Do not route around it by reopening answered questions, rewriting
+   questions or moving cards back and forth; that hides the bug and leaves the board harder to read.
 10. **Behavior changed? Spec changed.** If building reveals something the spec does not say,
    stop, add a question or update the spec, and set it back to `discussing`.
 11. **Too large? Recommend a split.** At any point before a spec is `done` (drafting,
